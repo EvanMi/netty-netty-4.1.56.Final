@@ -34,7 +34,19 @@ import java.util.concurrent.TimeUnit;
 public abstract class AbstractEventExecutor extends AbstractExecutorService implements EventExecutor {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractEventExecutor.class);
 
+    //mpc
+    // 优雅关闭静默期，默认为 2s 。这个参数主要来保证 Netty 整个关闭过程中的优雅。
+    // 在关闭流程开始后，如果 Reactor 中还有遗留的异步任务需要执行，那么 Netty 就不能关闭，
+    // 需要把所有异步任务执行完毕才可以。当所有异步任务执行完毕后，Netty 为了实现更加优雅的关闭操作，
+    // 一定要保障业务无损，这时候就引入了静默期这个概念，如果在这个静默期内，用户没有新的任务向 Reactor
+    // 提交那么就开始关闭。如果在这个静默期内，还有用户继续提交异步任务，那么就不能关闭，
+    // 需要把静默期内用户提交的异步任务执行完毕才可以放心关闭
     static final long DEFAULT_SHUTDOWN_QUIET_PERIOD = 2;
+    //mpc
+    //优雅关闭超时时间，默认为 15s 。
+    // 这个参数主要来保证 Netty 整个关闭过程的可控。
+    // 我们知道一个生产级的优雅关闭方案既要保证优雅做到业务无损，更重要的是要保证关闭流程的可控，不能无限制的优雅下去。
+    // 导致长时间无法完成关闭动作。于是 Netty 就引入了这个参数，如果优雅关闭超时，那么无论此时有无异步任务需要执行都要开始关闭了。
     static final long DEFAULT_SHUTDOWN_TIMEOUT = 15;
 
     private final EventExecutorGroup parent;
