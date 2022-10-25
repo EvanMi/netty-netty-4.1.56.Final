@@ -303,13 +303,17 @@ public final class ChannelOutboundBuffer {
 
         if (!e.cancelled) {
             // only release message, fail and decrement if it was not canceled before.
+            //释放msg所占用的内存空间
             ReferenceCountUtil.safeRelease(msg);
-
+            //编辑promise发送失败，并通知相应的Lisener
             safeFail(promise, cause);
+            //由于msg得到释放，所以需要降低channelOutboundBuffer中的内存占用水位线，
+            //并根据notifyWritability决定是否触发ChannelWritabilityChanged事件
             decrementPendingOutboundBytes(size, false, notifyWritability);
         }
 
         // recycle the entry
+        //回收Entry实例对象
         e.recycle();
 
         return true;
