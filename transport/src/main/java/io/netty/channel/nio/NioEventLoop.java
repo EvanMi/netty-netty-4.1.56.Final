@@ -113,8 +113,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
      */
     private Selector selector;
     private Selector unwrappedSelector;
+    //会通过反射替换selector对象中的selectedKeySet保存就绪的selectKey
+    //该字段为持有selector对象selectedKeys的引用，当IO事件就绪时，直接从这里获取
     private SelectedSelectionKeySet selectedKeys;
 
+    //用于创建JDK NIO Selector,ServerSocketChannel
     private final SelectorProvider provider;
 
     private static final long AWAKE = -1L;
@@ -135,6 +138,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     NioEventLoop(NioEventLoopGroup parent, Executor executor, SelectorProvider selectorProvider,
                  SelectStrategy strategy, RejectedExecutionHandler rejectedExecutionHandler,
                  EventLoopTaskQueueFactory queueFactory) {
+                                                        //创建任务列表               //创建任务列表
         super(parent, executor, false, newTaskQueue(queueFactory), newTaskQueue(queueFactory),
                 rejectedExecutionHandler);
         this.provider = ObjectUtil.checkNotNull(selectorProvider, "selectorProvider");
