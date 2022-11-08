@@ -43,10 +43,13 @@ import java.util.concurrent.RejectedExecutionException;
 public abstract class AbstractChannel extends DefaultAttributeMap implements Channel {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannel.class);
-
+    //channel是由创建层次的，比如ServerSocketChannel 是 SocketChannel的 parent
     private final Channel parent;
+    //channel全局唯一ID machineId+processId+sequence+timestamp+random
     private final ChannelId id;
+    //unsafe用于封装对底层socket的相关操作
     private final Unsafe unsafe;
+    //为channel分配独立的pipeline用于IO事件编排
     private final DefaultChannelPipeline pipeline;
     private final VoidChannelPromise unsafeVoidPromise = new VoidChannelPromise(this, false);
     // 关闭channel操作的指定future，来判断关闭流程进度 每个channel对应一个CloseFuture
@@ -71,6 +74,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      *        the parent of this channel. {@code null} if there's no parent.
      */
     protected AbstractChannel(Channel parent) {
+
         this.parent = parent;
         //channel全局唯一ID machineId + processId + sequence + timestamp + random
         id = newId();
@@ -461,6 +465,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 promise.setFailure(new IllegalStateException("registered to an event loop already"));
                 return;
             }
+            //EventLoop的类型要与Channel的类型一样  Nio Oio Aio
             if (!isCompatible(eventLoop)) {
                 promise.setFailure(
                         new IllegalStateException("incompatible event loop type: " + eventLoop.getClass().getName()));
@@ -494,11 +499,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             try {
                 // check if the channel is still open as it could be closed in the meantime when the register
                 // call was outside of the eventLoop
+                //查看注册操作是否已经取消，或者对应channel已经关闭
                 if (!promise.setUncancellable() || !ensureOpen(promise)) {
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+                //执行真正的注册操作
                 doRegister();
+                //修改注册状态
                 neverRegistered = false;
                 registered = true;
 
@@ -507,12 +515,15 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 //调用pipeline中的任务链表，执行PendingHandlerAddedTask
                 pipeline.invokeHandlerAddedIfNeeded();
 
+                //会回调doBind0进行绑定
                 safeSetSuccess(promise);
+                //触发channelRegister事件
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
                 if (isActive()) {
                     if (firstRegistration) {
+                        //触发channelActive事件
                         pipeline.fireChannelActive();
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
@@ -560,7 +571,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
-            //还没有active
+            //第一次绑定
             if (!wasActive && isActive()) {
                 invokeLater(new Runnable() {
                     @Override

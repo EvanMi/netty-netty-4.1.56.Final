@@ -863,9 +863,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     }
 
     private void execute(Runnable task, boolean immediate) {
+        //判断当前线程是否为Reactor线程 -- Reactor中的线程为空，当前线程也不可能是Reactor线程
         boolean inEventLoop = inEventLoop();
         addTask(task);
         if (!inEventLoop) {
+            //如果当前的线程不是Reactor线程，则启动Reactor线程
+            //这里可以看出Reactor线程的启动是通过向NioEventLoop添加异步任务时启动的
             startThread();
             if (isShutdown()) {
                 boolean reject = false;
@@ -1017,6 +1020,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         executor.execute(new Runnable() {
             @Override
             public void run() {
+                //这里executor是ThreadPerTaskExecutor，用它来执行已经开启了一个全新的线程
                 thread = Thread.currentThread();
                 if (interrupted) {
                     thread.interrupt();
