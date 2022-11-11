@@ -132,7 +132,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     private final SelectStrategy selectStrategy;
 
     private volatile int ioRatio = 50;
+    //记录Selector上移除socketChannel的个数 达到256个 则需要将无效的selectKey从SelectedKeys集合中清除掉
     private int cancelledKeys;
+    //用于及时从selectedKeys中清除失效的selectKey 比如 socketChannel从selector上被用户移除
     private boolean needsToSelectAgain;
 
     NioEventLoop(NioEventLoopGroup parent, Executor executor, SelectorProvider selectorProvider,
@@ -559,6 +561,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             }
             return true;
         }
+        /**
+         * 走到这里的条件是 既没有IO就绪事件，也没有异步任务，Reactor线程从Selector上被异常唤醒
+         * 这种情况可能是已经触发了JDK Epoll的空轮询BUG，如果这种情况持续512次 则认为可能已经触发BUG，于是重建Selector
+         *
+         * */
         if (SELECTOR_AUTO_REBUILD_THRESHOLD > 0 &&
                 selectCnt >= SELECTOR_AUTO_REBUILD_THRESHOLD) {
             // The selector returned prematurely many times in a row.
@@ -606,6 +613,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     void cancel(SelectionKey key) {
         key.cancel();
         cancelledKeys ++;
+        // 当从selector中移除的socketChannel数量达到256个，设置needsToSelectAgain为true
+        // 在io.netty.channel.nio.NioEventLoop.processSelectedKeysPlain 中重新做一次轮询，将失效的selectKey移除，
+        // 以保证selectedKeySet的有效性
         if (cancelledKeys >= CLEANUP_INTERVAL) {
             cancelledKeys = 0;
             needsToSelectAgain = true;
@@ -624,6 +634,8 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         for (;;) {
             final SelectionKey k = i.next();
             final Object a = k.attachment();
+            //注意每次迭代末尾的keyIterator.remove()调用。Selector不会自己从已选择键集中移除SelectionKey实例。
+            //必须在处理完通道时自己移除。下次该通道变成就绪时，Selector会再次将其放入已选择键集中。
             i.remove();
 
             if (a instanceof AbstractNioChannel) {
@@ -637,7 +649,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             if (!i.hasNext()) {
                 break;
             }
-
+            //目的是再次进入for循环 移除失效的selectKey(socketChannel可能从selector上移除)
             if (needsToSelectAgain) {
                 selectAgain();
                 selectedKeys = selector.selectedKeys();
@@ -672,6 +684,8 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             if (needsToSelectAgain) {
                 // null out entries in the array to allow to have it GC'ed once the Channel close
                 // See https://github.com/netty/netty/issues/2363
+                //为什么要自己reset呢？因为netty自己实现的set是没有移除某个对象的能力的
+                //而JDK NIO所在selectNow的时候只会根据对象进行移除
                 selectedKeys.reset(i + 1);
 
                 selectAgain();
@@ -704,25 +718,30 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
 
         try {
+            //获取IO就绪事件
             int readyOps = k.readyOps();
             // We first need to call finishConnect() before try to trigger a read(...) or write(...) as otherwise
             // the NIO JDK channel implementation may throw a NotYetConnectedException.
+            //处理connect事件
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
                 int ops = k.interestOps();
+                //移除对Connect事件的监听，否则Selector会一直通知
                 ops &= ~SelectionKey.OP_CONNECT;
                 k.interestOps(ops);
-
+                //触发ChannelActive事件处理Connect事件
                 unsafe.finishConnect();
             }
             // mpc
+            //处理write事件
             // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
                 ch.unsafe().forceFlush();
             }
 
+            //处理read事件或者accept事件
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {

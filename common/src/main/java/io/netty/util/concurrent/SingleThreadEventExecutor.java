@@ -293,12 +293,14 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
         long nanoTime = AbstractScheduledEventExecutor.nanoTime();
         for (;;) {
+            //从定时任务队列中取出到达执行deadline的定时任务  deadline <= nanoTime
             Runnable scheduledTask = pollScheduledTask(nanoTime);
             if (scheduledTask == null) {
                 return true;
             }
             if (!taskQueue.offer(scheduledTask)) {
                 // No space left in the task queue add it back to the scheduledTaskQueue so we pick it up again.
+                // taskQueue没有空间容纳 则在将定时任务重新塞进定时任务队列中等待下次执行
                 scheduledTaskQueue.add((ScheduledFutureTask<?>) scheduledTask);
                 return false;
             }
@@ -385,6 +387,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         boolean ranAtLeastOne = false;
 
         do {
+            //将到达执行时间的定时任务转存到普通任务队列taskQueue中，统一由Reactor线程从taskQueue中取出执行
             fetchedAll = fetchFromScheduledTaskQueue();
             if (runAllTasksFrom(taskQueue)) {
                 ranAtLeastOne = true;
@@ -394,6 +397,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         if (ranAtLeastOne) {
             lastExecutionTime = ScheduledFutureTask.nanoTime();
         }
+        //执行尾部队列任务
         afterRunningAllTasks();
         return ranAtLeastOne;
     }
@@ -473,10 +477,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         fetchFromScheduledTaskQueue();
         Runnable task = pollTask();
         if (task == null) {
+            //普通队列中没有任务时  执行队尾队列的任务
             afterRunningAllTasks();
             return false;
         }
 
+        //异步任务执行超时deadline
         final long deadline = timeoutNanos > 0 ? ScheduledFutureTask.nanoTime() + timeoutNanos : 0;
         long runTasks = 0;
         long lastExecutionTime;
@@ -487,9 +493,11 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
             // Check timeout every 64 tasks because nanoTime() is relatively expensive.
             // XXX: Hard-coded value - will make it configurable if it is really a problem.
+            //每运行64个异步任务 检查一下 是否达到 执行deadline
             if ((runTasks & 0x3F) == 0) {
                 lastExecutionTime = ScheduledFutureTask.nanoTime();
                 if (lastExecutionTime >= deadline) {
+                    //到达异步任务执行超时deadline，停止执行异步任务
                     break;
                 }
             }
