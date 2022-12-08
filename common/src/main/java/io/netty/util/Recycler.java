@@ -41,6 +41,7 @@ public abstract class Recycler<T> {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(Recycler.class);
 
+    //一个空的Handler，表示对象不会被池化
     @SuppressWarnings("rawtypes")
     private static final Handle NOOP_HANDLE = new Handle() {
         @Override
@@ -48,15 +49,27 @@ public abstract class Recycler<T> {
             // NOOP
         }
     };
+    //用于产生池化对象中的回收ID，主要用来标识池化对象被哪个线程回收
     private static final AtomicInteger ID_GENERATOR = new AtomicInteger(Integer.MIN_VALUE);
+    //用于标识创建池化对象的线程Id 注意这里是static final字段 也就意味着所有的创建线程OWN_THREAD_ID都是相同的
+    //这里主要用来区分创建线程与非创建线程。多个非创建线程拥有各自不同的Id
+    //这里的视角只是针对池化对象来说的：区分创建它的线程，与其他回收线程
     private static final int OWN_THREAD_ID = ID_GENERATOR.getAndIncrement();
+    //对象池中每个线程对应的Stack中可以存储池化对象的默认初始最大个数 默认为4096个对象
     private static final int DEFAULT_INITIAL_MAX_CAPACITY_PER_THREAD = 4 * 1024; // Use 4k instances as default.
+    // 对象池中线程对应的Stack可以存储池化对象默认最大个数 4096
     private static final int DEFAULT_MAX_CAPACITY_PER_THREAD;
+    // 初始容量 min(DEFAULT_MAX_CAPACITY_PER_THREAD, 256) 初始容量不超过256个
     private static final int INITIAL_CAPACITY;
+    //用于计算回收线程可帮助回收的最大容量因子  默认为2
     private static final int MAX_SHARED_CAPACITY_FACTOR;
+    //每个回收线程最多可以帮助多少个创建线程回收对象 默认：cpu核数 * 2
     private static final int MAX_DELAYED_QUEUES_PER_THREAD;
+    //回收线程对应的WeakOrderQueue节点中的Link链表中的节点存储待回收对象的容量 默认为16
     private static final int LINK_CAPACITY;
+    //创建线程回收对象时的回收比例，默认是8，表示只回收1/8的对象。也就是产生8个对象回收一个对象到对象池中
     private static final int RATIO;
+    //回收线程回收对象时的回收比例，默认也是8，同样也是为了避免回收线程回收队列疯狂增长 回收比例也是1/8
     private static final int DELAYED_QUEUE_RATIO;
 
     static {
@@ -167,13 +180,20 @@ public abstract class Recycler<T> {
 
     @SuppressWarnings("unchecked")
     public final T get() {
+        //maxCapacityPerThread说明根本没有池，直接new一个对象返回就行了，而且该对象的Handle也是一个无操作的Handle，
+        //表示在回收的时候不会做任何操作
         if (maxCapacityPerThread == 0) {
             return newObject((Handle<T>) NOOP_HANDLE);
         }
+        //获取当前线程用来保存池化对象的stack
         Stack<T> stack = threadLocal.get();
+        //从stack中pop出对象，handler是池化对象在对象池中的模型，包装了一些池化对象的回收信息和回收状态
         DefaultHandle<T> handle = stack.pop();
+        //如果当前线程的stack中没有池化对象 则直接创建对象
         if (handle == null) {
+            //初始化的handler对象recycleId和lastRecyclerId均为0
             handle = stack.newHandle();
+            //newObject为对象池recycler的抽象方法，由使用者初始化内存池的时候 匿名提供
             handle.value = newObject(handle);
         }
         return (T) handle.value;
@@ -210,12 +230,15 @@ public abstract class Recycler<T> {
     public interface Handle<T> extends ObjectPool.Handle<T>  { }
 
     private static final class DefaultHandle<T> implements Handle<T> {
+        //用于标识上一次被哪个线程回收，被回收之前均是0
         int lastRecycledId;
+        //用于标识当前被哪个线程回收，在没被回收前是0
         int recycleId;
-
+        //是否已经被回收
         boolean hasBeenRecycled;
-
+        //强引用关联创建handler的stack
         Stack<?> stack;
+        //池化对象
         Object value;
 
         DefaultHandle(Stack<?> stack) {
@@ -229,6 +252,9 @@ public abstract class Recycler<T> {
             }
 
             Stack<?> stack = this.stack;
+            //handler初次创建以及从对象池中获取到时  recycleId = lastRecycledId = 0（对象被回收之前）
+            //创建线程回收对象后recycleId = lastRecycledId = OWN_THREAD_ID
+            //回收线程回收对象后lastRecycledId = 回收线程Id,当对象被转移到stack中后 recycleId = lastRecycledId = 回收线程Id
             if (lastRecycledId != recycleId || stack == null) {
                 throw new IllegalStateException("recycled already");
             }
@@ -237,6 +263,9 @@ public abstract class Recycler<T> {
         }
     }
 
+    //实现跨线程回收的核心，这里保存的是当前线程为其他线程回收的对象（由其他线程创建的池化对象）
+    //key: 池化对象对应的创建线程stack  value: 当前线程代替该创建线程回收的池化对象 存放在weakOrderQueue中
+    //这里的value即是 创建线程对应stack中的weakOrderQueue链表中的节点（每个节点表示其他线程为当前创建线程回收的对象）
     private static final FastThreadLocal<Map<Stack<?>, WeakOrderQueue>> DELAYED_RECYCLED =
             new FastThreadLocal<Map<Stack<?>, WeakOrderQueue>>() {
         @Override
@@ -253,17 +282,24 @@ public abstract class Recycler<T> {
 
         // Let Link extend AtomicInteger for intrinsics. The Link itself will be used as writerIndex.
         @SuppressWarnings("serial")
+        //link结构是用于真正存储待回收对象的结构，继承AtomicInteger 本身可以用来当做writeIndex使用
         static final class Link extends AtomicInteger {
+            //数组用来存储待回收对象，容量为16
             final DefaultHandle<?>[] elements = new DefaultHandle[LINK_CAPACITY];
 
             int readIndex;
+            //weakOrderQueue中的存储结构时由link结构节点元素组成的链表结构
             Link next;
         }
 
         // Its important this does not hold any reference to either Stack or WeakOrderQueue.
+        //weakOrderQueue内部link链表的头结点
         private static final class Head {
+            //所有回收线程能够帮助创建线程回收对象的总容量 reserveSpaceForLink方法中会多线程操作该字段
+            //用于指示当前回收线程是否继续为创建线程回收对象，所有回收线程都可以看到，
+            //这个值是所有回收线程共享的。以便可以保证所有回收线程回收的对象总量不能超过availableSharedCapacity
             private final AtomicInteger availableSharedCapacity;
-
+            //link链表的头结点
             Link link;
 
             Head(AtomicInteger availableSharedCapacity) {
@@ -289,10 +325,13 @@ public abstract class Recycler<T> {
                 }
             }
 
+            //所有回收线程都可以看到，这个值是所有回收线程共享的。
+            //以便可以保证所有回收线程回收的对象总量不能超过availableSharedCapacity
             private void reclaimSpace(int space) {
                 availableSharedCapacity.addAndGet(space);
             }
 
+            //参数link为新的head节点，当前head指针指向的节点已经被回收完毕
             void relink(Link link) {
                 reclaimSpace(LINK_CAPACITY);
                 this.link = link;
@@ -306,6 +345,7 @@ public abstract class Recycler<T> {
                 return reserveSpaceForLink(availableSharedCapacity) ? new Link() : null;
             }
 
+            //此处目的是为接下来要创建的link预留空间容量
             static boolean reserveSpaceForLink(AtomicInteger availableSharedCapacity) {
                 for (;;) {
                     int available = availableSharedCapacity.get();
@@ -320,12 +360,20 @@ public abstract class Recycler<T> {
         }
 
         // chain of data items
+        //link链表的头结点，head指针始终指向第一个未被转移完毕的LinK节点
         private final Head head;
+        //尾结点
         private Link tail;
         // pointer to another queue of delayed items for the same stack
+        //站在stack的视角中，stack中包含一个weakOrderQueue的链表，
+        //每个回收线程为当前stack回收的对象存放在回收线程对应的weakOrderQueue中
+        //这样通过stack中的这个weakOrderQueue链表，就可以找到其他线程为该创建线程回收的对象
         private WeakOrderQueue next;
+        //回收线程回收Id,每个weakOrderQueue分配一个，同一个stack下的一个回收线程对应一个weakOrderQueue节点
         private final int id = ID_GENERATOR.getAndIncrement();
+        //回收线程回收比例 默认是8
         private final int interval;
+        //回收线程回收计数 回收1/8的对象
         private int handleRecycleCount;
 
         private WeakOrderQueue() {
@@ -440,61 +488,86 @@ public abstract class Recycler<T> {
         // transfer as many items as we can from this queue to the stack, returning true if any were transferred
         @SuppressWarnings("rawtypes")
         boolean transfer(Stack<?> dst) {
+            //获取当前weakOrderQueue节点中的link链表头结点
             Link head = this.head.link;
+            //头结点为null说明还没有待回收对象
             if (head == null) {
                 return false;
             }
 
+            //如果头结点中的待回收对象已经被转移完毕
             if (head.readIndex == LINK_CAPACITY) {
+                //判断是否有后续Link节点
                 if (head.next == null) {
+                    //整个link链表没有待回收对象了已经
                     return false;
                 }
                 head = head.next;
+                //当前Head节点已经被转移完毕，head指针向后移动，head指针始终指向第一个未被转移完毕的LinK节点
                 this.head.relink(head);
             }
 
             final int srcStart = head.readIndex;
+            //writeIndex
             int srcEnd = head.get();
+            //该link节点可被转移的对象容量
             final int srcSize = srcEnd - srcStart;
             if (srcSize == 0) {
                 return false;
             }
-
+            // 获取创建线程stack中的当前回收对象数量总量
             final int dstSize = dst.size;
+            // 待回收对象从weakOrderQueue中转移到stack后，stack的新容量 = 转移前stack容量 + 转移的待回收对象个数
             final int expectedCapacity = dstSize + srcSize;
 
             if (expectedCapacity > dst.elements.length) {
+                //如果转移后的stack容量超过当前stack的容量 则对stack进行扩容
                 final int actualCapacity = dst.increaseCapacity(expectedCapacity);
+                //每次转移最多一个Link的容量
+                //actualCapacity - dstSize表示扩容后的stack还有多少剩余空间
                 srcEnd = min(srcStart + actualCapacity - dstSize, srcEnd);
             }
 
             if (srcStart != srcEnd) {
+                //待转移对象集合 也就是Link节点中存储的元素
                 final DefaultHandle[] srcElems = head.elements;
+                //stack中存储转移对象数组
                 final DefaultHandle[] dstElems = dst.elements;
                 int newDstSize = dstSize;
                 for (int i = srcStart; i < srcEnd; i++) {
                     DefaultHandle<?> element = srcElems[i];
+                    //recycleId == 0 表示对象还没有被真正的回收到stack中
                     if (element.recycleId == 0) {
+                        //设置recycleId 表明是被哪个weakOrderQueue回收的
                         element.recycleId = element.lastRecycledId;
                     } else if (element.recycleId != element.lastRecycledId) {
+                        //既被创建线程回收 同时也被回收线程回收  回收多次 则停止转移
                         throw new IllegalStateException("recycled already");
                     }
+                    //对象转移后需要置空Link节点对应的位置
                     srcElems[i] = null;
 
+                    //这里从weakOrderQueue将待回收对象真正回收到所属stack之前 需要进行回收频率控制
                     if (dst.dropHandle(element)) {
                         // Drop the object.
                         continue;
                     }
+                    //重新为defaultHandler设置其所属stack(初始创建该handler的线程对应的stack)
+                    //该defaultHandler在被回收对象回收的时候，会将其stack置为null，防止极端情况下，创建线程挂掉，对应stack无法被GC
                     element.stack = dst;
                     dstElems[newDstSize ++] = element;
                 }
 
                 if (srcEnd == LINK_CAPACITY && head.next != null) {
                     // Add capacity back as the Link is GCed.
+                    // 如果当前Link已经被回收完毕，且link链表还有后续节点，则更新head指针
                     this.head.relink(head.next);
                 }
 
+                //更新当前回收Link的readIndex
                 head.readIndex = srcEnd;
+                //如果没有转移任何数据 return false
+                //这里为什么要判断呢？主要原因可能link剩余的数据将小于8个的时候正好全部被跳过了
                 if (dst.size == newDstSize) {
                     return false;
                 }
@@ -513,6 +586,7 @@ public abstract class Recycler<T> {
         // than the stack owner recycles: when we run out of items in our stack we iterate this collection
         // to scavenge those that can be reused. this permits us to incur minimal thread synchronisation whilst
         // still recycling all items.
+        // 创建线程保存池化对象的stack结构所属对象池recycler实例
         final Recycler<T> parent;
 
         // We store the Thread in a WeakReference as otherwise we may be the only ones that still hold a strong
@@ -521,16 +595,28 @@ public abstract class Recycler<T> {
         // The biggest issue is if we do not use a WeakReference the Thread may not be able to be collected at all if
         // the user will store a reference to the DefaultHandle somewhere and never clear this reference (or not clear
         // it in a timely manner).
+        //用弱引用来关联当前stack对应的创建线程 因为用户可能在某个地方引用了defaultHandler -> stack -> thread，可能存在这个引用链
+        //当创建线程死掉之后 可能因为这个引用链的存在而导致thread无法被回收掉
         final WeakReference<Thread> threadRef;
+        //所有回收线程能够帮助当前创建线程回收对象的总容量
         final AtomicInteger availableSharedCapacity;
+        //当前Stack对应的创建线程作为其他创建线程的回收线程时可以帮助多少个线程回收其池化对象
         private final int maxDelayedQueues;
-
+        //当前创建线程对应的stack结构中的最大容量。 默认4096个对象
         private final int maxCapacity;
+        //当前创建线程回收对象时的回收比例
         private final int interval;
+        //当前创建线程作为其他线程的回收线程时回收其他线程的池化对象比例
         private final int delayedQueueInterval;
+        // 当前Stack中的数组栈 默认初始容量256，最大容量为4096
         DefaultHandle<?>[] elements;
+        //数组栈 栈顶指针
         int size;
+        //回收对象计数 与 interval配合 实现只回收一定比例的池化对象
         private int handleRecycleCount;
+
+        //多线程回收的设计，核心还是无锁化，避免多线程回收相互竞争
+        //Stack结构中的WeakOrderQueue链表
         private WeakOrderQueue cursor, prev;
         private volatile WeakOrderQueue head;
 
@@ -548,7 +634,9 @@ public abstract class Recycler<T> {
         }
 
         // Marked as synchronized to ensure this is serialized.
+        //整个recycler对象池唯一的一个同步方法，而且同步块非常小，逻辑简单，执行迅速
         synchronized void setHead(WeakOrderQueue queue) {
+            //始终在weakOrderQueue链表头结点插入新的节点
             queue.setNext(head);
             head = queue;
         }
@@ -570,13 +658,18 @@ public abstract class Recycler<T> {
 
         @SuppressWarnings({ "unchecked", "rawtypes" })
         DefaultHandle<T> pop() {
+            //普通出栈操作，从栈顶弹出一个回收对象
             int size = this.size;
             if (size == 0) {
+                //如果当前线程所属stack已经没有对象可用，则遍历stack中的weakOrderQueue链表
+                // （其他线程帮助回收的对象存放在这里）将这些待回收对象回收进stack
                 if (!scavenge()) {
                     return null;
                 }
                 size = this.size;
                 if (size <= 0) {
+                    // 如果WeakOrderQueue链表中也没有待回收对象可转移
+                    // 直接返回null 新创建一个对象
                     // double check, avoid races
                     return null;
                 }
@@ -590,8 +683,10 @@ public abstract class Recycler<T> {
             this.size = size;
 
             if (ret.lastRecycledId != ret.recycleId) {
+                // 这种情况表示对象至少被一个线程回收了，要么是创建线程，要么是回收线程
                 throw new IllegalStateException("recycled multiple times");
             }
+            //对象初次创建以及回收对象再次使用时  它的 recycleId = lastRecycleId = 0
             ret.recycleId = 0;
             ret.lastRecycledId = 0;
             return ret;
@@ -599,10 +694,13 @@ public abstract class Recycler<T> {
 
         private boolean scavenge() {
             // continue an existing scavenge, if any
+            //从其他线程回收的weakOrderQueue里 转移 待回收对像 到当前线程的stack中
             if (scavengeSome()) {
                 return true;
             }
 
+            // 如果weakOrderQueue中没有待回收对象可转移，那么就重置stack中的cursor.prev
+            // 因为在扫描weakOrderQueue链表的过程中，cursor已经发生变化了
             // reset our scavenge cursor
             prev = null;
             cursor = head;
@@ -611,28 +709,38 @@ public abstract class Recycler<T> {
 
         private boolean scavengeSome() {
             WeakOrderQueue prev;
+            //获取当前线程stack 的weakOrderQueue链表指针（本次扫描起始节点）
             WeakOrderQueue cursor = this.cursor;
+            //在stack初始化完成后，cursor，prev,head等指针全部是null，
+            // 这里如果cursor == null 意味着当前stack第一次开始扫描weakOrderQueue链表
             if (cursor == null) {
                 prev = null;
                 cursor = head;
                 if (cursor == null) {
+                    //说明目前weakOrderQueue链表里还没有节点，并没有其他线程帮助回收的池化对象
                     return false;
                 }
             } else {
+                //获取prev指针，用于操作链表（删除当前cursor节点）
                 prev = this.prev;
             }
 
             boolean success = false;
+            //循环遍历weakOrderQueue链表 转移待回收对象
             do {
+                //将weakOrderQueue链表中当前节点中包含的待回收对象，转移到当前stack中，一次转移一个link
                 if (cursor.transfer(this)) {
                     success = true;
                     break;
                 }
+                //如果当前cursor节点没有待回收对象可转移，那么就继续遍历链表获取下一个weakOrderQueue节点
                 WeakOrderQueue next = cursor.getNext();
+                //如果当前weakOrderQueue对应的回收线程已经挂掉了，则
                 if (cursor.get() == null) {
                     // If the thread associated with the queue is gone, unlink it, after
                     // performing a volatile read to confirm there is no data left to collect.
                     // We never unlink the first queue, as we don't want to synchronize on updating the head.
+                    //回收weakOrderQueue中最后一点可回收对象，因为对应的回收线程已经死掉了，这个weakOrderQueue不会再有任何对象了
                     if (cursor.hasFinalData()) {
                         for (;;) {
                             if (cursor.transfer(this)) {
@@ -642,7 +750,9 @@ public abstract class Recycler<T> {
                             }
                         }
                     }
-
+                    //回收线程以死，对应的weaoOrderQueue节点中的最后一点待回收对象也已经回收完毕，就需要将当前节点从链表中删除。unlink当前cursor节点
+                    //这里需要注意的是，netty永远不会删除第一个节点，因为更新头结点是一个同步方法，避免更新头结点而导致的竞争开销
+                    // prev == null 说明当前cursor节点是头结点。不用unlink，如果不是头结点 就将其从链表中删除，因为这个节点不会再有线程来收集池化对象了
                     if (prev != null) {
                         // Ensure we reclaim all space before dropping the WeakOrderQueue to be GC'ed.
                         cursor.reclaimAllSpaceAndUnlink();
@@ -706,6 +816,7 @@ public abstract class Recycler<T> {
         }
 
         private void pushLater(DefaultHandle<?> item, Thread thread) {
+            //maxDelayQueues == 0 表示不支持对象的跨线程回收
             if (maxDelayedQueues == 0) {
                 // We don't support recycling across threads and should just drop the item on the floor.
                 return;
@@ -720,6 +831,7 @@ public abstract class Recycler<T> {
             if (queue == null) {
                 //maxDelayedQueues指示一个线程最多可以帮助多少个线程回收其创建的对象
                 //delayedRecycled.size()表示当前线程已经帮助多少个线程回收对象
+                //注意这里的视角切换，当前线程为回收线程
                 if (delayedRecycled.size() >= maxDelayedQueues) {
                     // Add a dummy queue so we know we should drop the object
                     //如果超过指定帮助线程个数，则停止为其创建WeakOrderQueue，停止为其回收对象

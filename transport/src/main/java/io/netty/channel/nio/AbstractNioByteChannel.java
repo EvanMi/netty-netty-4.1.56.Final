@@ -149,10 +149,10 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             //获取NioSocketChannel的pipeline
             final ChannelPipeline pipeline = pipeline();
             //PooledByteBufAllocator 具体用于实际分配ByteBuf的分配器
-            //其实就是MaxMessageHandle
             final ByteBufAllocator allocator = config.getAllocator();
             //自适应ByteBuf分配器 AdaptiveRecvByteBufAllocator，用于动态调节ByteBuf容量
             //需要与具体的ByteBuf分配器配合使用 比如这里的PooledByteBufAllocator
+            //其实就是MaxMessageHandle
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
             //allocHandler用于统计每次读取数据的大小，方便下次分配合适大小的ByteBuf
             //重置清除上次的统计指标

@@ -86,10 +86,17 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
      */
     public abstract class MaxMessageHandle implements ExtendedHandle {
         private ChannelConfig config;
+        //用于控制每次read loop里最大可以循环读取的次数，默认为16次
+        //可以在启动配置类ServerBootStrap中通过ChannelOption.MAX_MESSAGES_PER_READ选项设置。
         private int maxMessagePerRead;
+        //用于统计read loop中总共接收的链接个数/读取数据的次数，
+        //每次read loop循环后会调用allocHandle.incMessageRead增加
         private int totalMessages;
+        //在整个read loop循环过程中所读到的字节数
         private int totalBytesRead;
+        //尝试读取的数据量，这里设置为对应的buffer的可写字节数，也就是尝试写满
         private int attemptedBytesRead;
+        //上次循环中所读取的字节数
         private int lastBytesRead;
         private final boolean respectMaybeMoreData = DefaultMaxMessagesRecvByteBufAllocator.this.respectMaybeMoreData;
         private final UncheckedBooleanSupplier defaultMaybeMoreSupplier = new UncheckedBooleanSupplier() {
@@ -143,7 +150,7 @@ public abstract class DefaultMaxMessagesRecvByteBufAllocator implements MaxMessa
             return config.isAutoRead() &&
                     //maybeMoreDataSupplier.get()为真表示一次就把buf给写的满满的了，表明数据量很足
                     //maybeMoreDataSupplier只是根据这次读没读满就来判断是不是有数据，也只是给出一个可能而已，即便这次没有读满，下次也
-                    //可能继续读到数据!!! 因此就多了一个respectMaybeMoreData的开发，即respectMaybeMoreData为false的时候，完全不
+                    //可能继续读到数据!!! 因此就多了一个respectMaybeMoreData的开关，即respectMaybeMoreData为false的时候，完全不
                     //理会猜测的结果
                    (!respectMaybeMoreData || maybeMoreDataSupplier.get()) &&
                     //没有超过允许读的最大次数

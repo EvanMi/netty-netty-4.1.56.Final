@@ -61,7 +61,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
 
         @Override
         public void read() {
+            //必须在main reactor线程中执行
             assert eventLoop().inEventLoop();
+            //config和pipeline都是服务端ServerSocketChannel中的
             final ChannelConfig config = config();
             final ChannelPipeline pipeline = pipeline();
             //在accept场景中，这里只是一个简单的计数器，没有真实的数据读取作用
@@ -73,7 +75,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        //底层调用NioServerSocketChannel->doReadMessages 创建客户端SocketChannel
                         int localRead = doReadMessages(readBuf);
+                        //如果没有新的连接可接收，则直接退出循环
                         if (localRead == 0) {
                             break;
                         }
@@ -92,10 +96,15 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
                     //触发read事件
+                    //在NioServerSocketChannel对应的pipeline中传播ChannelRead事件
+                    //初始化客户端SocketChannel，并将其绑定到Sub Reactor线程组中的一个Reactor上
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
+                //清空本次所接收到的连接建立请求
                 readBuf.clear();
+                //这里会动态调整下一次要读数据的大小，这里并不处理数据，有何用？
                 allocHandle.readComplete();
+                //触发readComplete事件传播
                 pipeline.fireChannelReadComplete();
 
                 if (exception != null) {
