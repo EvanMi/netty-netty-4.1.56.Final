@@ -84,6 +84,7 @@ final class ChannelHandlerMask {
         Map<Class<? extends ChannelHandler>, Integer> cache = MASKS.get();
         Integer mask = cache.get(clazz);
         if (mask == null) {
+            // 计算ChannelHandler对应的mask（什么类型的ChannelHandler，对什么事件感兴趣）
             mask = mask0(clazz);
             cache.put(clazz, mask);
         }
@@ -97,6 +98,7 @@ final class ChannelHandlerMask {
         int mask = MASK_EXCEPTION_CAUGHT;
         try {
             if (ChannelInboundHandler.class.isAssignableFrom(handlerType)) {
+                //如果该ChannelHandler是Inbound类型的，则先将inbound事件全部设置进掩码中
                 mask |= MASK_ALL_INBOUND;
 
                 if (isSkippable(handlerType, "channelRegistered", ChannelHandlerContext.class)) {
@@ -126,6 +128,7 @@ final class ChannelHandlerMask {
             }
 
             if (ChannelOutboundHandler.class.isAssignableFrom(handlerType)) {
+                //如果handler为Outbound类型的，则先将全部outbound事件设置进掩码中
                 mask |= MASK_ALL_OUTBOUND;
 
                 if (isSkippable(handlerType, "bind", ChannelHandlerContext.class,

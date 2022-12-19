@@ -68,11 +68,13 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             return new WeakHashMap<Class<?>, String>();
         }
     };
-
+    //原子更新estimatorHandle字段
     private static final AtomicReferenceFieldUpdater<DefaultChannelPipeline, MessageSizeEstimator.Handle> ESTIMATOR =
             AtomicReferenceFieldUpdater.newUpdater(
                     DefaultChannelPipeline.class, MessageSizeEstimator.Handle.class, "estimatorHandle");
+    //pipeline中的头结点
     final AbstractChannelHandlerContext head;
+    //pipeline中的尾结点
     final AbstractChannelHandlerContext tail;
 
     private final Channel channel;
@@ -101,10 +103,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private boolean registered;
 
     protected DefaultChannelPipeline(Channel channel) {
+        //pipeline中持有对应channel的引用
         this.channel = ObjectUtil.checkNotNull(channel, "channel");
         succeededFuture = new SucceededChannelFuture(channel, null);
         voidPromise =  new VoidChannelPromise(channel, true);
 
+        //初始化的的pipeline中默认会有Head和Tail两个Context，并且会相互建立连接
         tail = new TailContext(this);
         head = new HeadContext(this);
 
@@ -410,10 +414,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     private String generateName(ChannelHandler handler) {
+        // 获取pipeline中channelHandler对应的name缓存
         Map<Class<?>, String> cache = nameCaches.get();
         Class<?> handlerType = handler.getClass();
         String name = cache.get(handlerType);
         if (name == null) {
+            // 当前handler还没对应的name缓存，则默认生成：simpleClassName + #0
             name = generateName0(handlerType);
             cache.put(handlerType, name);
         }
@@ -666,6 +672,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private void callHandlerRemoved0(final AbstractChannelHandlerContext ctx) {
         // Notify the complete removal.
         try {
+            // 在这里回调 handlerRemoved 方法
             ctx.callHandlerRemoved();
         } catch (Throwable t) {
             fireExceptionCaught(new ChannelPipelineException(
@@ -679,6 +686,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             firstRegistration = false;
             // We are now registered to the EventLoop. It's time to call the callbacks for the ChannelHandlers,
             // that were added before the registration was done.
+            // 执行 pipeline 任务列表中的 PendingHandlerAddedTask 任务。
             callHandlerAddedForAllHandlers();
         }
     }
@@ -1127,13 +1135,13 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     private void callHandlerAddedForAllHandlers() {
+        // pipeline 任务列表中的头结点
         final PendingHandlerCallback pendingHandlerCallbackHead;
         synchronized (this) {
             assert !registered;
 
             // This Channel itself was registered.
             registered = true;
-
             pendingHandlerCallbackHead = this.pendingHandlerCallbackHead;
             // Null out so it can be GC'ed.
             this.pendingHandlerCallbackHead = null;
@@ -1142,8 +1150,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         // This must happen outside of the synchronized(...) block as otherwise handlerAdded(...) may be called while
         // holding the lock and so produce a deadlock if handlerAdded(...) will try to add another handler from outside
         // the EventLoop.
+        // 挨个执行任务列表中的任务
         PendingHandlerCallback task = pendingHandlerCallbackHead;
         while (task != null) {
+            //触发 ChannelInitializer 的 handlerAdded 回调
             task.execute();
             task = task.next;
         }
@@ -1343,6 +1353,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             //又是一个 ChannelHandler ，它可以同时处理 Inbound 事件和 Outbound 事件
             implements ChannelOutboundHandler, ChannelInboundHandler {
 
+        //headContext中持有对channel unsafe操作类的引用 用于执行channel底层操作
         private final Unsafe unsafe;
 
         HeadContext(DefaultChannelPipeline pipeline) {
