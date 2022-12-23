@@ -349,6 +349,7 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
         //预期要读取的数据，目的就是把一个buf写满
         allocHandle.attemptedBytesRead(byteBuf.writableBytes());
+        //读到EOF后，这里会返回-1
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }
 

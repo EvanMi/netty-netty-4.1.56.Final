@@ -60,6 +60,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private volatile SocketAddress remoteAddress;
     private volatile EventLoop eventLoop;
     private volatile boolean registered;
+    // channel的关闭流程是否已经开始
     private boolean closeInitiated;
     private Throwable initialCloseCause;
 
@@ -647,7 +648,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             if (!promise.setUncancellable()) {
                 return;
             }
-
+            //如果Channel已经close了，直接返回
+            //如果Channel已经close了，直接返回
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null) { //如果channel已经close了，直接返回
                 promise.setFailure(new ClosedChannelException());
@@ -723,11 +725,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             if (closeInitiated) {//已经开始进行关闭相关的操作
+                //如果此时channel已经开始关闭流程，则进入这里
                 if (closeFuture.isDone()) {
                     // Closed already.
+                    //如果channel已经关闭 则设置promise为success，如果promise是voidPromise类型则会跳过
                     safeSetSuccess(promise);
                 } else if (!(promise instanceof VoidChannelPromise)) { // Only needed if no VoidChannelPromise.
                     // This means close() was called before so we just register a listener and return
+                    //如果promise不是voidPromise，则会在关闭完成后 通过closeFuture设置promise success
                     closeFuture.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(ChannelFuture future) throws Exception {
@@ -789,6 +794,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         outboundBuffer.close(closeCause);
                     }
                 }
+                // 此时 Channel 已经关闭，如果此时用户还在执行 flush 操作
+                // netty 则会在 flush 方法的处理中处理 Channel 关闭的情况
+                // 所以这里 deRegister 操作需要延后到 flush 方法处理完之后
                 if (inFlush0) {
                     invokeLater(new Runnable() {
                         @Override
