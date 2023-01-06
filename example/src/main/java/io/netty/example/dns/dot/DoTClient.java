@@ -48,7 +48,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 public final class DoTClient {
-    private static final String QUERY_DOMAIN = "www.jd.com";
+    private static final String QUERY_DOMAIN = "www.example.com";
     private static final int DNS_SERVER_PORT = 853;
 
     /**https://www.alidns.com/articles/6018321800a44d0e45e90d71*/
