@@ -34,10 +34,11 @@ public class FileServerHandler extends SimpleChannelInboundHandler<String> {
 
     @Override
     public void channelRead0(ChannelHandlerContext ctx, String msg) throws Exception {
+        String path = getClass().getResource("").getPath();
         RandomAccessFile raf = null;
         long length = -1;
         try {
-            raf = new RandomAccessFile(msg, "r");
+            raf = new RandomAccessFile(path + msg, "r");
             length = raf.length();
         } catch (Exception e) {
             ctx.writeAndFlush("ERR: " + e.getClass().getSimpleName() + ": " + e.getMessage() + '\n');
