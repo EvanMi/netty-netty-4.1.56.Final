@@ -46,7 +46,7 @@ public final class DnsClient {
 
     private static final String QUERY_DOMAIN = "www.example.com";
     private static final int DNS_SERVER_PORT = 53;
-    private static final String DNS_SERVER_HOST = "8.8.8.8";
+    private static final String DNS_SERVER_HOST = "114.114.114.114";
 
     private DnsClient() { }
 
