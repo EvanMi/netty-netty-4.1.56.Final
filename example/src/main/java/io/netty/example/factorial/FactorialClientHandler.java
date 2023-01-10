@@ -62,17 +62,23 @@ public class FactorialClientHandler extends SimpleChannelInboundHandler<BigInteg
     }
 
     @Override
-    public void channelRead0(ChannelHandlerContext ctx, final BigInteger msg) {
+    public void channelRead0(final ChannelHandlerContext ctx, final BigInteger msg) {
         receivedMessages ++;
         if (receivedMessages == FactorialClient.COUNT) {
             // Offer the answer after closing the connection.
-            ctx.channel().close().addListener(new ChannelFutureListener() {
+            ctx.executor().execute(new Runnable() {
                 @Override
-                public void operationComplete(ChannelFuture future) {
-                    boolean offered = answer.offer(msg);
-                    assert offered;
+                public void run() {
+                    ctx.channel().close().addListener(new ChannelFutureListener() {
+                        @Override
+                        public void operationComplete(ChannelFuture future) {
+                            boolean offered = answer.offer(msg);
+                            assert offered;
+                        }
+                    });
                 }
             });
+
         }
     }
 
