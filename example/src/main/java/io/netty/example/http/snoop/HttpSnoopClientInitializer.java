@@ -21,6 +21,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.stream.ChunkedWriteHandler;
 
 public class HttpSnoopClientInitializer extends ChannelInitializer<SocketChannel> {
 
@@ -46,6 +47,8 @@ public class HttpSnoopClientInitializer extends ChannelInitializer<SocketChannel
 
         // Uncomment the following line if you don't want to handle HttpContents.
         //p.addLast(new HttpObjectAggregator(1048576));
+        // 为了处理chuck
+        p.addLast(new ChunkedWriteHandler());
 
         p.addLast(new HttpSnoopClientHandler());
     }

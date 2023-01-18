@@ -59,10 +59,13 @@ public class HttpSnoopServerHandler extends SimpleChannelInboundHandler<Object> 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
+            //处理http请求
             HttpRequest request = this.request = (HttpRequest) msg;
 
+            //处理100 continue请求
             if (HttpUtil.is100ContinueExpected(request)) {
                 send100Continue(ctx);
+                return;
             }
 
             buf.setLength(0);
@@ -104,7 +107,11 @@ public class HttpSnoopServerHandler extends SimpleChannelInboundHandler<Object> 
 
             ByteBuf content = httpContent.content();
             if (content.isReadable()) {
-                buf.append("CONTENT: ");
+                if (HttpUtil.isTransferEncodingChunked(request)) {
+                    buf.append("CHUNKED CONTENT: ");
+                } else {
+                    buf.append("CONTENT: ");
+                }
                 buf.append(content.toString(CharsetUtil.UTF_8));
                 buf.append("\r\n");
                 appendDecoderResult(buf, request);

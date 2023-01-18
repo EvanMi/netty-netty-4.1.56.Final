@@ -21,24 +21,25 @@ import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.cookie.ClientCookieEncoder;
 import io.netty.handler.codec.http.cookie.DefaultCookie;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.handler.stream.ChunkedFile;
-import io.netty.handler.stream.ChunkedStream;
-import io.netty.util.CharsetUtil;
 
-import java.io.ByteArrayInputStream;
 import java.net.URI;
 
 /**
  * A simple HTTP client that prints out the content of the HTTP response to
  * {@link System#out} to test {@link HttpSnoopServer}.
  */
-public final class HttpSnoopClient {
+public final class OldHttpSnoopClient {
 
     static final String URL = System.getProperty("url", "http://127.0.0.1:8080/");
 
@@ -65,7 +66,7 @@ public final class HttpSnoopClient {
         final SslContext sslCtx;
         if (ssl) {
             sslCtx = SslContextBuilder.forClient()
-                .trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+                    .trustManager(InsecureTrustManagerFactory.INSTANCE).build();
         } else {
             sslCtx = null;
         }
@@ -75,41 +76,18 @@ public final class HttpSnoopClient {
         try {
             Bootstrap b = new Bootstrap();
             b.group(group)
-             .channel(NioSocketChannel.class)
-             .handler(new HttpSnoopClientInitializer(sslCtx));
+                    .channel(NioSocketChannel.class)
+                    .handler(new HttpSnoopClientInitializer(sslCtx));
 
             // Make the connection attempt.
             Channel ch = b.connect(host, port).sync().channel();
 
-            /**
-             * chunked报文格式
-             *
-             * headers\r\n
-             * size\r\n
-             * data\r\n
-             * size\r\n
-             * data\r\n
-             * ...
-             * 0\r\n
-             * trailer\r\n
-             * */
-
             // Prepare the HTTP request.
-            HttpRequest request = new DefaultHttpRequest(
-                    HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath() + "?name=lily&age=18");
+            HttpRequest request = new DefaultFullHttpRequest(
+                    HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath(), Unpooled.EMPTY_BUFFER);
             request.headers().set(HttpHeaderNames.HOST, host);
             request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
             request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP);
-            //sudo tcpdump -i lo0 host 127.0.0.1 and port 8080 -w file
-            //为了触发trailer
-            request.headers().set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
-            DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent(Unpooled.copiedBuffer("dog~lee", CharsetUtil.UTF_8), true);
-            HttpHeaders entries = defaultLastHttpContent.trailingHeaders();
-            entries.set("trailer-nice", "yes ");
-            HttpChunkedInput httpChunkedInput = new HttpChunkedInput(new ChunkedStream(new ByteArrayInputStream("abc".getBytes())),
-                    defaultLastHttpContent);
-            //理解错误，在chunked以后不需要设置长度字段了，而是以最后一个长度必然为0的chunk来表示传输完成
-            //request.headers().set(HttpHeaderNames.CONTENT_LENGTH, httpChunkedInput.length());
 
             // Set some example cookies.
             request.headers().set(
@@ -120,8 +98,6 @@ public final class HttpSnoopClient {
 
             // Send the HTTP request.
             ch.writeAndFlush(request);
-            // 发送数据内容
-            ch.writeAndFlush(httpChunkedInput);
 
             // Wait for the server to close the connection.
             ch.closeFuture().sync();

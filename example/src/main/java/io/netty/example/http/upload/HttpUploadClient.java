@@ -95,7 +95,11 @@ public final class HttpUploadClient {
         }
 
         URI uriFile = new URI(postFile);
-        File file = new File(FILE);
+
+
+        String path = HttpUploadClient.class.getResource("/").getPath();
+        String filePath = path + "io/netty/example/http/upload/" + FILE;
+        File file = new File(filePath);
         if (!file.canRead()) {
             throw new FileNotFoundException(FILE);
         }
@@ -229,6 +233,7 @@ public final class HttpUploadClient {
         bodyRequestEncoder.addBodyAttribute("secondinfo", "secondvalue ���&");
         bodyRequestEncoder.addBodyAttribute("thirdinfo", textArea);
         bodyRequestEncoder.addBodyAttribute("fourthinfo", textAreaLong);
+        //看看内部逻辑~~不是multipart直接给干的就剩名字了
         bodyRequestEncoder.addBodyFileUpload("myfile", file, "application/x-zip-compressed", false);
 
         // finalize request
@@ -287,7 +292,7 @@ public final class HttpUploadClient {
         bodyRequestEncoder.setBodyHttpDatas(bodylist);
 
         // finalize request
-        bodyRequestEncoder.finalizeRequest();
+        request = bodyRequestEncoder.finalizeRequest();
 
         // send request
         channel.write(request);

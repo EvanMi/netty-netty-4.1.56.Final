@@ -239,7 +239,11 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
                     builder.append("(DefinedSize: ").append(partialContent.definedLength()).append(")");
                 }
                 if (partialContent.definedLength() > 0) {
-                    builder.append(" ").append(partialContent.length() * 100 / partialContent.definedLength())
+                    //理想很丰满，现实很骨感，这里获取到的length值都是0，原因是只有当找到分隔线以后才会写入数据，中间态的
+                    //数据都是保存在未解码的chunk中的
+                    //我研究的版本比较老，在最新的分支中已经解决了相关问题
+                    //https://github.com/netty/netty/blob/4.1/codec-http/src/main/java/io/netty/handler/codec/http/multipart/HttpPostMultipartRequestDecoder.java
+                    builder.append(" ").append(partialContent.length() * 100 * 1.0 / partialContent.definedLength())
                         .append("% ");
                     logger.info(builder.toString());
                 } else {
