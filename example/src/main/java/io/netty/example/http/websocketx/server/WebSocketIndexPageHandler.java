@@ -40,7 +40,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.*;
  */
 public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
-    private final String websocketPath;
+    private final String websocketPath;//
 
     public WebSocketIndexPageHandler(String websocketPath) {
         this.websocketPath = websocketPath;

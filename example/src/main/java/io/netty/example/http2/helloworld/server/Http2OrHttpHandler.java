@@ -23,23 +23,28 @@ import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler;
 /**
  * Negotiates with the browser if HTTP2 or HTTP is going to be used. Once decided, the Netty
  * pipeline is setup with the correct handlers for the selected protocol.
+ * <br/>
+ * 在使用tls的情况下，到底使用http还是http2由该handler进行决定
  */
 public class Http2OrHttpHandler extends ApplicationProtocolNegotiationHandler {
 
     private static final int MAX_CONTENT_LENGTH = 1024 * 100;
 
     protected Http2OrHttpHandler() {
+        //如果ALPN/NPN协商失败，或者客户端根本不支持ALPN/NPN,那么这里使用HTTP_1_1
         super(ApplicationProtocolNames.HTTP_1_1);
     }
 
     @Override
     protected void configurePipeline(ChannelHandlerContext ctx, String protocol) throws Exception {
         if (ApplicationProtocolNames.HTTP_2.equals(protocol)) {
+            System.err.println("选择了HTTP_2");
             ctx.pipeline().addLast(new HelloWorldHttp2HandlerBuilder().build());
             return;
         }
 
         if (ApplicationProtocolNames.HTTP_1_1.equals(protocol)) {
+            System.err.println("选择了HTTP_1_1");
             ctx.pipeline().addLast(new HttpServerCodec(),
                                    new HttpObjectAggregator(MAX_CONTENT_LENGTH),
                                    new HelloWorldHttp1Handler("ALPN Negotiation"));

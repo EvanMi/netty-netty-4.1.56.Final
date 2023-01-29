@@ -29,7 +29,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WebSocketFrame frame) throws Exception {
-        // ping and pong frames already handled
+        // ping and pong frames already handled !!!!!!! 被前面的WebSocketServerProtocolHandler给处理掉了
 
         if (frame instanceof TextWebSocketFrame) {
             // Send the uppercase string back.

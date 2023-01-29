@@ -68,7 +68,7 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
     }
 
     @Override
-    public void initChannel(SocketChannel ch) {
+    public void initChannel(SocketChannel ch) {//
         if (sslCtx != null) {
             configureSsl(ch);
         } else {
@@ -89,12 +89,16 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
     private void configureClearText(SocketChannel ch) {
         final ChannelPipeline p = ch.pipeline();
         final HttpServerCodec sourceCodec = new HttpServerCodec();
+        //处理通过h2c的方式升级
         final HttpServerUpgradeHandler upgradeHandler = new HttpServerUpgradeHandler(sourceCodec, upgradeCodecFactory);
+        //处理通过prior的方式升级
         final CleartextHttp2ServerUpgradeHandler cleartextHttp2ServerUpgradeHandler =
                 new CleartextHttp2ServerUpgradeHandler(sourceCodec, upgradeHandler,
                                                        new HelloWorldHttp2HandlerBuilder().build());
-
+        //处理升级请求
         p.addLast(cleartextHttp2ServerUpgradeHandler);
+
+        //如果不是HTTP_1_X中的HttpMessage，那么这个Handler是不会被触发的（泛型不匹配）
         p.addLast(new SimpleChannelInboundHandler<HttpMessage>() {
             @Override
             protected void channelRead0(ChannelHandlerContext ctx, HttpMessage msg) throws Exception {
@@ -102,7 +106,9 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
                 System.err.println("Directly talking: " + msg.protocolVersion() + " (no upgrade was attempted)");
                 ChannelPipeline pipeline = ctx.pipeline();
                 pipeline.addAfter(ctx.name(), null, new HelloWorldHttp1Handler("Direct. No Upgrade Attempted."));
+
                 pipeline.replace(this, null, new HttpObjectAggregator(maxHttpContentLength));
+                //替换以后，当前的ctx的next和pre都会指向新的ctx，所以这里触发读事件就是把数据传递到了新的ctx中进行处理
                 ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
             }
         });

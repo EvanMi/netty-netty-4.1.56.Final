@@ -24,7 +24,7 @@ import io.netty.util.internal.UnstableApi;
 // TODO: Should we extend SocketChannel and map input and output state to the stream state ?
 //
 @UnstableApi
-public interface Http2StreamChannel extends Channel {
+public interface  Http2StreamChannel extends Channel {
 
     /**
      * Returns the {@link Http2FrameStream} that belongs to this channel.

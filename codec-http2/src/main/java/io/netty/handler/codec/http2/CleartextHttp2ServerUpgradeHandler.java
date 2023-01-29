@@ -78,12 +78,15 @@ public final class CleartextHttp2ServerUpgradeHandler extends ByteToMessageDecod
         int prefaceLength = CONNECTION_PREFACE.readableBytes();
         int bytesRead = Math.min(in.readableBytes(), prefaceLength);
 
+        //只要前缀匹配上就算匹配了
         if (!ByteBufUtil.equals(CONNECTION_PREFACE, CONNECTION_PREFACE.readerIndex(),
                 in, in.readerIndex(), bytesRead)) {
+            //如果不是通过prior的方式建立http2链接，那么就移除当前handler
             ctx.pipeline().remove(this);
         } else if (bytesRead == prefaceLength) {
             // Full h2 preface match, removed source codec, using http2 codec to handle
             // following network traffic
+            //否则，直接将自己，以及通过h2c的方式建立http2链接的handler也都移除，然后直接添加http2对应的handler
             ctx.pipeline()
                     .remove(httpServerCodec)
                     .remove(httpServerUpgradeHandler);

@@ -67,6 +67,7 @@ public final class HelloWorldHttp2Handler extends Http2ConnectionHandler impleme
      */
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        //该方法用来处理通过明文的方式升级到HTTP2的方式
         if (evt instanceof HttpServerUpgradeHandler.UpgradeEvent) {
             HttpServerUpgradeHandler.UpgradeEvent upgradeEvent =
                     (HttpServerUpgradeHandler.UpgradeEvent) evt;
@@ -92,6 +93,8 @@ public final class HelloWorldHttp2Handler extends Http2ConnectionHandler impleme
         encoder().writeData(ctx, streamId, payload, 0, true, ctx.newPromise());
 
         // no need to call flush as channelReadComplete(...) will take care of it.
+        // 如果交给独立的业务线程进行处理的话，是需要进行flush的，要不然channelReadComplete是粗发不了这部分
+        // 写入数据的的flush操作的。
     }
 
     @Override

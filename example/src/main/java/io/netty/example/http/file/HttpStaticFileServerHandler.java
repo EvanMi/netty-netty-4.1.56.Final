@@ -195,6 +195,7 @@ public class HttpStaticFileServerHandler extends SimpleChannelInboundHandler<Ful
         // Write the content.
         ChannelFuture sendFileFuture;
         ChannelFuture lastContentFuture;
+        //response.headers().set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
         if (ctx.pipeline().get(SslHandler.class) == null) {
             sendFileFuture =
                     ctx.write(new DefaultFileRegion(raf.getChannel(), 0, fileLength), ctx.newProgressivePromise());

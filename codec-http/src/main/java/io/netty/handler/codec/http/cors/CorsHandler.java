@@ -220,7 +220,9 @@ public class CorsHandler extends ChannelDuplexHandler {
         if (config != null && config.isCorsSupportEnabled() && msg instanceof HttpResponse) {
             final HttpResponse response = (HttpResponse) msg;
             if (setOrigin(response)) {
+                //只需要设置 allow origin就可以了
                 setAllowCredentials(response);
+                //设置暴露的头
                 setExposeHeaders(response);
             }
         }

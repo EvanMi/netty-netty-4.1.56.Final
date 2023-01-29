@@ -80,14 +80,22 @@ public class HttpCorsServerInitializer extends ChannelInitializer<SocketChannel>
 
     @Override
     public void initChannel(SocketChannel ch) {
-        CorsConfig corsConfig = CorsConfigBuilder.forAnyOrigin().allowNullOrigin().allowCredentials().build();
+        CorsConfig corsConfig = CorsConfigBuilder
+                .forAnyOrigin()
+                .allowNullOrigin()
+                .allowCredentials()
+                //.exposeHeaders("custom-response-header")
+                .build();
+
         ChannelPipeline pipeline = ch.pipeline();
         if (sslCtx != null) {
             pipeline.addLast(sslCtx.newHandler(ch.alloc()));
         }
         pipeline.addLast(new HttpResponseEncoder());
         pipeline.addLast(new HttpRequestDecoder());
+        //不用处理接收到的 chunk了
         pipeline.addLast(new HttpObjectAggregator(65536));
+        //自己发出的chunk要处理
         pipeline.addLast(new ChunkedWriteHandler());
         pipeline.addLast(new CorsHandler(corsConfig));
         pipeline.addLast(new OkResponseHandler());

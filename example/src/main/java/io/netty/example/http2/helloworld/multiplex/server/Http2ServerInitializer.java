@@ -90,7 +90,7 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
     /**
      * Configure the pipeline for a cleartext upgrade from HTTP to HTTP/2.0
      */
-    private void configureClearText(SocketChannel ch) {
+    private void configureClearText(SocketChannel ch) {//
         final ChannelPipeline p = ch.pipeline();
         final HttpServerCodec sourceCodec = new HttpServerCodec();
 
