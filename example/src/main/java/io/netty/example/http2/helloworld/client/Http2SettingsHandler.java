@@ -55,6 +55,11 @@ public class Http2SettingsHandler extends SimpleChannelInboundHandler<Http2Setti
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Http2Settings msg) throws Exception {
+
+        //消息传到这里结束了
+
+        System.err.println("http2Settings: " + msg);
+
         promise.setSuccess();
 
         // Only care about the first settings message

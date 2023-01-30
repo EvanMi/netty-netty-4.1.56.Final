@@ -62,11 +62,15 @@ public class Http2ClientInitializer extends ChannelInitializer<SocketChannel> {
     @Override
     public void initChannel(SocketChannel ch) throws Exception {
         final Http2Connection connection = new DefaultHttp2Connection(false);
+        //这个handler用来将发送的HTTP_1报文转换为HTTP2报文
         connectionHandler = new HttpToHttp2ConnectionHandlerBuilder()
+                //用来进行解压缩
                 .frameListener(new DelegatingDecompressorFrameListener(
                         connection,
+                        //这个Adapter用来将接收到的HTTP2报文转换为HTTP_1报文
                         new InboundHttp2ToHttpAdapterBuilder(connection)
                                 .maxContentLength(maxContentLength)
+                                //向后传递setting信息，会被Http2SettingsHandler所处理
                                 .propagateSettings(true)
                                 .build()))
                 .frameLogger(logger)
@@ -123,6 +127,7 @@ public class Http2ClientInitializer extends ChannelInitializer<SocketChannel> {
     private void configureClearText(SocketChannel ch) {
         HttpClientCodec sourceCodec = new HttpClientCodec();
         Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(connectionHandler);
+        //该handler会给第一个请求http的请求头上添加必要的升级信息，如果返回的响应状态码为101，则进行升级，否则将自己从pipeline中移除。
         HttpClientUpgradeHandler upgradeHandler = new HttpClientUpgradeHandler(sourceCodec, upgradeCodec, 65536);
 
         ch.pipeline().addLast(sourceCodec,
@@ -135,6 +140,7 @@ public class Http2ClientInitializer extends ChannelInitializer<SocketChannel> {
      * A handler that triggers the cleartext upgrade to HTTP/2 by sending an initial HTTP request.
      */
     private final class UpgradeRequestHandler extends ChannelInboundHandlerAdapter {
+        //在channel激活的时候，立马发送一个空的http get请求来触发协议升级。
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -152,10 +158,11 @@ public class Http2ClientInitializer extends ChannelInitializer<SocketChannel> {
             ctx.writeAndFlush(upgradeRequest);
 
             ctx.fireChannelActive();
-
+            // 发送完请求以后就移除自己
             // Done with this handler, remove it from the pipeline.
             ctx.pipeline().remove(this);
 
+            //同时添加其他必要的handler
             configureEndOfPipeline(ctx.pipeline());
         }
     }

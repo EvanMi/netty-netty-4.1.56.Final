@@ -42,6 +42,7 @@ public final class HelloWorldHttp2HandlerBuilder
     protected HelloWorldHttp2Handler build(Http2ConnectionDecoder decoder, Http2ConnectionEncoder encoder,
                                            Http2Settings initialSettings) {
         HelloWorldHttp2Handler handler = new HelloWorldHttp2Handler(decoder, encoder, initialSettings);
+        //设置frame listener也是该handler
         frameListener(handler);
         return handler;
     }

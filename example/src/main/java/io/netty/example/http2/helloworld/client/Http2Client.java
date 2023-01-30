@@ -64,7 +64,7 @@ public final class Http2Client {
     static final String HOST = System.getProperty("host", "127.0.0.1");
     static final int PORT = Integer.parseInt(System.getProperty("port", SSL? "8443" : "8080"));
     static final String URL = System.getProperty("url", "/whatever");
-    static final String URL2 = System.getProperty("url2");
+    static final String URL2 = System.getProperty("url2", "/nice");
     static final String URL2DATA = System.getProperty("url2data", "test data!");
 
     public static void main(String[] args) throws Exception {
@@ -72,6 +72,7 @@ public final class Http2Client {
         final SslContext sslCtx;
         if (SSL) {
             SslProvider provider = SslProvider.isAlpnSupported(SslProvider.OPENSSL) ? SslProvider.OPENSSL : SslProvider.JDK;
+
             sslCtx = SslContextBuilder.forClient()
                 .sslProvider(provider)
                 /* NOTE: the cipher filter may not include all ciphers required by the HTTP/2 specification.
@@ -84,6 +85,7 @@ public final class Http2Client {
                     SelectorFailureBehavior.NO_ADVERTISE,
                     // ACCEPT is currently the only mode supported by both OpenSsl and JDK providers.
                     SelectedListenerFailureBehavior.ACCEPT,
+                    // 支持的应用协议列表
                     ApplicationProtocolNames.HTTP_2,
                     ApplicationProtocolNames.HTTP_1_1))
                 .build();
@@ -108,10 +110,13 @@ public final class Http2Client {
             System.out.println("Connected to [" + HOST + ':' + PORT + ']');
 
             // Wait for the HTTP/2 upgrade to occur.
+            // 等待http升级完成
             Http2SettingsHandler http2SettingsHandler = initializer.settingsHandler();
             http2SettingsHandler.awaitSettings(5, TimeUnit.SECONDS);
 
+            //等待请求结果被处理
             HttpResponseHandler responseHandler = initializer.responseHandler();
+            //streamId从3开始，每次加2
             int streamId = 3;
             HttpScheme scheme = SSL ? HttpScheme.HTTPS : HttpScheme.HTTP;
             AsciiString hostName = new AsciiString(HOST + ':' + PORT);
@@ -137,6 +142,7 @@ public final class Http2Client {
                 responseHandler.put(streamId, channel.write(request), channel.newPromise());
             }
             channel.flush();
+            //等待服务端的返回结果，处理完成后继续往下执行
             responseHandler.awaitResponses(5, TimeUnit.SECONDS);
             System.out.println("Finished HTTP/2 request(s)");
 

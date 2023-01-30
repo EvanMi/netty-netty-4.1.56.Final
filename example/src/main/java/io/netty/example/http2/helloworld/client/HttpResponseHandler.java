@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  * Process {@link io.netty.handler.codec.http.FullHttpResponse} translated from HTTP/2 frames
  */
 public class HttpResponseHandler extends SimpleChannelInboundHandler<FullHttpResponse> {
+    //这是我们常用的一种回调方式，通过requestId将自己的请求（CompletableFuture）方在map中，当read到数据以后，进行必要的回调。
 
     private final Map<Integer, Entry<ChannelFuture, ChannelPromise>> streamidPromiseMap;
 
@@ -97,6 +98,8 @@ public class HttpResponseHandler extends SimpleChannelInboundHandler<FullHttpRes
         Entry<ChannelFuture, ChannelPromise> entry = streamidPromiseMap.get(streamId);
         if (entry == null) {
             System.err.println("Message received for unknown stream id " + streamId);
+            System.err.println("----------");
+            System.err.println(msg);
         } else {
             // Do stuff with the message (for now just print it)
             ByteBuf content = msg.content();

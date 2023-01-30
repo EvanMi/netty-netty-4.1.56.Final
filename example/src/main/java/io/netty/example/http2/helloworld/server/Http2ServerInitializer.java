@@ -91,7 +91,7 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
         final HttpServerCodec sourceCodec = new HttpServerCodec();
         //处理通过h2c的方式升级
         final HttpServerUpgradeHandler upgradeHandler = new HttpServerUpgradeHandler(sourceCodec, upgradeCodecFactory);
-        //处理通过prior的方式升级
+        //处理通过prior的方式建立连接
         final CleartextHttp2ServerUpgradeHandler cleartextHttp2ServerUpgradeHandler =
                 new CleartextHttp2ServerUpgradeHandler(sourceCodec, upgradeHandler,
                                                        new HelloWorldHttp2HandlerBuilder().build());
