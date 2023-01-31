@@ -61,12 +61,15 @@ public final class Http2FrameClient {
         // Configure SSL.
         final SslContext sslCtx;
         if (SSL) {
+            //创建SslProvider
             final SslProvider provider =
                     SslProvider.isAlpnSupported(SslProvider.OPENSSL)? SslProvider.OPENSSL : SslProvider.JDK;
+
             sslCtx = SslContextBuilder.forClient()
                   .sslProvider(provider)
                   .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
                   // you probably won't want to use this in production, but it is fine for this example:
+                    //很不幸，我在很多实际工作中就是这么使用的
                   .trustManager(InsecureTrustManagerFactory.INSTANCE)
                   .applicationProtocolConfig(new ApplicationProtocolConfig(
                           Protocol.ALPN,
@@ -95,7 +98,11 @@ public final class Http2FrameClient {
                     new Http2ClientStreamFrameResponseHandler();
 
             final Http2StreamChannelBootstrap streamChannelBootstrap = new Http2StreamChannelBootstrap(channel);
+
+            //获取一个的http2 channel
             final Http2StreamChannel streamChannel = streamChannelBootstrap.open().syncUninterruptibly().getNow();
+
+            //手动给pipeline中添加相应的业务handler，这里手动再添加感觉是不合理的
             streamChannel.pipeline().addLast(streamFrameResponseHandler);
 
             // Send request (a HTTP/2 HEADERS frame - with ':method = GET' in this case)

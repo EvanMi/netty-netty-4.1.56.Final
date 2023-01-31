@@ -53,10 +53,13 @@ public class HelloWorldHttp2Handler extends ChannelDuplexHandler {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        //处理头请求头
         if (msg instanceof Http2HeadersFrame) {
             onHeadersRead(ctx, (Http2HeadersFrame) msg);
+        //处理请求数据
         } else if (msg instanceof Http2DataFrame) {
             onDataRead(ctx, (Http2DataFrame) msg);
+        //透传
         } else {
             super.channelRead(ctx, msg);
         }

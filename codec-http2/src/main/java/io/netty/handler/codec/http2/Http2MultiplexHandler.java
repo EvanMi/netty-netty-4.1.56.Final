@@ -260,6 +260,8 @@ public final class Http2MultiplexHandler extends Http2ChannelDuplexHandler {
 
     // TODO: This is most likely not the best way to expose this, need to think more about it.
     Http2StreamChannel newOutboundStream() {
+        // 我理解这里应该把 inboundStreamHandler 加进来
+        // return new Http2MultiplexHandlerStreamChannel((DefaultHttp2FrameStream) newStream(), inboundStreamHandler);
         return new Http2MultiplexHandlerStreamChannel((DefaultHttp2FrameStream) newStream(), null);
     }
 

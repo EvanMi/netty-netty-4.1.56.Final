@@ -23,16 +23,14 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.example.http2.helloworld.server.HelloWorldHttp1Handler;
+import io.netty.example.http2.helloworld.server.HelloWorldHttp2HandlerBuilder;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodec;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler.UpgradeCodecFactory;
-import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
-import io.netty.handler.codec.http2.Http2CodecUtil;
-import io.netty.handler.codec.http2.Http2MultiplexHandler;
-import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
+import io.netty.handler.codec.http2.*;
 import io.netty.handler.ssl.SslContext;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
@@ -94,8 +92,19 @@ public class Http2ServerInitializer extends ChannelInitializer<SocketChannel> {
         final ChannelPipeline p = ch.pipeline();
         final HttpServerCodec sourceCodec = new HttpServerCodec();
 
-        p.addLast(sourceCodec);
-        p.addLast(new HttpServerUpgradeHandler(sourceCodec, upgradeCodecFactory));
+        //p.addLast(sourceCodec);
+        //p.addLast(new HttpServerUpgradeHandler(sourceCodec, upgradeCodecFactory));
+
+        //处理通过h2c的方式升级
+        final HttpServerUpgradeHandler upgradeHandler = new HttpServerUpgradeHandler(sourceCodec, upgradeCodecFactory);
+        //处理通过prior的方式建立连接
+        final CleartextHttp2ServerUpgradeHandler cleartextHttp2ServerUpgradeHandler =
+                new CleartextHttp2ServerUpgradeHandler(sourceCodec, upgradeHandler,
+                        new HelloWorldHttp2HandlerBuilder().build());
+        //处理升级请求
+        p.addLast(cleartextHttp2ServerUpgradeHandler);
+
+
         p.addLast(new SimpleChannelInboundHandler<HttpMessage>() {
             @Override
             protected void channelRead0(ChannelHandlerContext ctx, HttpMessage msg) throws Exception {
