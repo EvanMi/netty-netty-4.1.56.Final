@@ -38,6 +38,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 public final class Launcher {
 
     public static void main(String[] args) {
+        //event loop
         EventLoopGroup group = new NioEventLoopGroup();
         Http2Server http2 = new Http2Server(group);
         HttpServer http = new HttpServer(group);
