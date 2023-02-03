@@ -17,6 +17,7 @@
 package io.netty.example.http2.tiles;
 
 import static io.netty.handler.codec.http2.Http2SecurityUtil.CIPHERS;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -58,12 +59,15 @@ public class Http2Server {
         final SslContext sslCtx = configureTLS();
         ServerBootstrap b = new ServerBootstrap();
         b.option(ChannelOption.SO_BACKLOG, 1024);
-        b.group(group).channel(NioServerSocketChannel.class).childHandler(new ChannelInitializer<SocketChannel>() {
-            @Override
-            protected void initChannel(SocketChannel ch) throws Exception {
-                ch.pipeline().addLast(sslCtx.newHandler(ch.alloc()), new Http2OrHttpHandler());
-            }
-        });
+        b.group(group)
+                .channel(NioServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel ch) throws Exception {
+                        ch.pipeline()
+                                .addLast(sslCtx.newHandler(ch.alloc()), new Http2OrHttpHandler());
+                    }
+                });
 
         Channel ch = b.bind(PORT).sync().channel();
         return ch.closeFuture();
@@ -81,7 +85,7 @@ public class Http2Server {
                 ApplicationProtocolNames.HTTP_1_1);
 
         return SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey(), null)
-                                .ciphers(CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
-                                .applicationProtocolConfig(apn).build();
+                .ciphers(CIPHERS, SupportedCipherSuiteFilter.INSTANCE)
+                .applicationProtocolConfig(apn).build();
     }
 }
