@@ -28,6 +28,8 @@ import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.ReferenceCountUtil;
 
+import java.util.concurrent.TimeUnit;
+
 public class MqttHeartBeatClientHandler extends ChannelInboundHandlerAdapter {
 
     private static final String PROTOCOL_NAME_MQTT_3_1_1 = "MQTT";
@@ -66,6 +68,13 @@ public class MqttHeartBeatClientHandler extends ChannelInboundHandlerAdapter {
                 new MqttConnectMessage(connectFixedHeader, connectVariableHeader, connectPayload);
         ctx.writeAndFlush(connectMessage);
         System.out.println("Sent CONNECT");
+        ctx.executor().schedule(() -> {
+            MqttFixedHeader pingreqFixedHeader =
+                    new MqttFixedHeader(MqttMessageType.DISCONNECT, false, MqttQoS.AT_MOST_ONCE, false, 0);
+            MqttMessage disMsg = new MqttMessage(pingreqFixedHeader);
+            System.out.println("Sent DISCONNECT");
+            ctx.writeAndFlush(disMsg);
+        }, 2, TimeUnit.MINUTES);
     }
 
     @Override

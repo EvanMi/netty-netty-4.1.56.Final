@@ -61,7 +61,8 @@ public final class MqttHeartBeatBrokerHandler extends ChannelInboundHandlerAdapt
             break;
         default:
             System.out.println("Unexpected message type: " + mqttMessage.fixedHeader().messageType());
-            ReferenceCountUtil.release(msg);
+            //毫无意义的release
+            //ReferenceCountUtil.release(msg);
             ctx.close();
         }
     }
