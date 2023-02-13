@@ -19,9 +19,11 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.internal.ThreadLocalRandom;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 
@@ -38,7 +40,7 @@ public class ObjectEchoClientHandler extends ChannelInboundHandlerAdapter {
      * Creates a client-side handler.
      */
     public ObjectEchoClientHandler() {
-        firstMessage = new ArrayList<Integer>(ObjectEchoClient.SIZE);
+        firstMessage = new ArrayList<>(ObjectEchoClient.SIZE);
         for (int i = 0; i < ObjectEchoClient.SIZE; i ++) {
             firstMessage.add(Integer.valueOf(i));
         }
@@ -48,17 +50,25 @@ public class ObjectEchoClientHandler extends ChannelInboundHandlerAdapter {
     public void channelActive(ChannelHandlerContext ctx) {
         // Send the first message if this handler is a client-side handler.
         ChannelFuture future = ctx.writeAndFlush(firstMessage);
+        // 可以学到的是netty中默认提供的listener
         future.addListener(FIRE_EXCEPTION_ON_FAILURE); // Let object serialisation exceptions propagate.
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws InterruptedException {//对父类中方法上的异常进行收缩
         // Echo back the received object to the server.
-        ctx.write(msg);
+        TimeUnit.SECONDS.sleep(2);
+        assert msg instanceof List;
+        List<Integer> msgLst = (List<Integer>) msg;
+        int size = msgLst.size();
+        int i = ThreadLocalRandom.current().nextInt(size);
+        msgLst.set(i, msgLst.get(i) + (msgLst.get(i) % 2 == 0 ? 1 : -1));
+        ctx.write(msgLst);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
+        //使用这种方式来发送消息，那么所有的业务逻辑需要在channelRead中同步处理
         ctx.flush();
     }
 

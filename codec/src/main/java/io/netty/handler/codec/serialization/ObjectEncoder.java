@@ -57,7 +57,7 @@ public class ObjectEncoder extends MessageToByteEncoder<Serializable> {
         }
 
         int endIdx = out.writerIndex();
-
+        //更新一下写入的长度，那么看来解码的时候一定使用的是基于长度的解码方式了
         out.setInt(startIdx, endIdx - startIdx - 4);
     }
 }
