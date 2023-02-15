@@ -509,6 +509,7 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
         } finally {
             boolean removePending = decodeState == STATE_HANDLER_REMOVED_PENDING;
             decodeState = STATE_INIT;
+            //如果在decoder中没有被处理，那么会传递到后面的handler中，所以在decode方法中可以直接返回
             if (removePending) {
                 fireChannelRead(ctx, out, out.size());
                 out.clear();

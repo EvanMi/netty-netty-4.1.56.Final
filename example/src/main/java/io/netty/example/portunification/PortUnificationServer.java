@@ -36,7 +36,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
  */
 public final class PortUnificationServer {
 
-    static final int PORT = Integer.parseInt(System.getProperty("port", "8080"));
+    static final int PORT = Integer.parseInt(System.getProperty("port", "8888"));
 
     public static void main(String[] args) throws Exception {
         // Configure SSL context

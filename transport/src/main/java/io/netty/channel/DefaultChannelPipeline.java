@@ -517,6 +517,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      * Method is synchronized to make the handler removal from the double linked list atomic.
      */
     private synchronized void atomicRemoveFromHandlerList(AbstractChannelHandlerContext ctx) {
+        //这里并没有把当前的handler所对应的pre和next设置为null，所以在调用了remove方法以后
+        //任然能够在后续的逻辑中使用fireChannelRead之类的操作来把请求发送到下游
         AbstractChannelHandlerContext prev = ctx.prev;
         AbstractChannelHandlerContext next = ctx.next;
         prev.next = next;

@@ -111,6 +111,7 @@ public class PortUnificationServerHandler extends ByteToMessageDecoder {
     }
 
     private void enableSsl(ChannelHandlerContext ctx) {
+        System.out.println("ssl被激活~");
         ChannelPipeline p = ctx.pipeline();
         p.addLast("ssl", sslCtx.newHandler(ctx.alloc()));
         p.addLast("unificationA", new PortUnificationServerHandler(sslCtx, false, detectGzip));
@@ -118,6 +119,7 @@ public class PortUnificationServerHandler extends ByteToMessageDecoder {
     }
 
     private void enableGzip(ChannelHandlerContext ctx) {
+        System.out.println("gzip被激活~");
         ChannelPipeline p = ctx.pipeline();
         p.addLast("gzipdeflater", ZlibCodecFactory.newZlibEncoder(ZlibWrapper.GZIP));
         p.addLast("gzipinflater", ZlibCodecFactory.newZlibDecoder(ZlibWrapper.GZIP));
@@ -126,6 +128,7 @@ public class PortUnificationServerHandler extends ByteToMessageDecoder {
     }
 
     private void switchToHttp(ChannelHandlerContext ctx) {
+        System.out.println("http 协议被激活~");
         ChannelPipeline p = ctx.pipeline();
         p.addLast("decoder", new HttpRequestDecoder());
         p.addLast("encoder", new HttpResponseEncoder());
@@ -135,6 +138,7 @@ public class PortUnificationServerHandler extends ByteToMessageDecoder {
     }
 
     private void switchToFactorial(ChannelHandlerContext ctx) {
+        System.out.println("factorial协议被激活~");
         ChannelPipeline p = ctx.pipeline();
         p.addLast("decoder", new BigIntegerDecoder());
         p.addLast("encoder", new NumberEncoder());
