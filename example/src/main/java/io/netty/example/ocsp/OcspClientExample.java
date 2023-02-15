@@ -16,46 +16,28 @@
 
 package io.netty.example.ocsp;
 
-import java.math.BigInteger;
-
-import javax.net.ssl.SSLSession;
-import javax.security.cert.X509Certificate;
-
+import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.ssl.*;
+import io.netty.handler.ssl.ocsp.OcspClientHandler;
+import io.netty.util.CharsetUtil;
+import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.Promise;
 import org.bouncycastle.asn1.ocsp.OCSPResponseStatus;
 import org.bouncycastle.cert.ocsp.BasicOCSPResp;
 import org.bouncycastle.cert.ocsp.CertificateStatus;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
+import sun.misc.BASE64Encoder;
+import sun.security.provider.X509Factory;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObjectAggregator;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.ReferenceCountedOpenSslContext;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslHandler;
-import io.netty.handler.ssl.SslProvider;
-import io.netty.handler.ssl.ocsp.OcspClientHandler;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.Promise;
+import javax.net.ssl.SSLSession;
+import javax.security.cert.X509Certificate;
+import java.math.BigInteger;
 
 /**
  * This is a very simple example for an HTTPS client that uses OCSP stapling.
@@ -79,11 +61,12 @@ public class OcspClientExample {
         //
         // openssl s_client -tlsextdebug -status -connect www.squarespace.com:443
         //
-        String host = "www.wikipedia.org";
-
+        //String host = "www.wikipedia.org";
+        String host = "www.programmer-yumi.top";
         ReferenceCountedOpenSslContext context
             = (ReferenceCountedOpenSslContext) SslContextBuilder.forClient()
                 .sslProvider(SslProvider.OPENSSL)
+                //开启OCSP
                 .enableOcsp(true)
                 .build();
 
@@ -104,6 +87,12 @@ public class OcspClientExample {
 
                 try {
                     FullHttpResponse response = promise.get();
+                    int len = response.content().readableBytes();
+                    System.out.println("返回的消息的长度：" + len);
+                    if (len < 1000) {
+                        System.out.println(response.content().toString(CharsetUtil.UTF_8));
+                    }
+
                     ReferenceCountUtil.release(response);
                 } finally {
                     channel.close();
@@ -119,7 +108,7 @@ public class OcspClientExample {
     private static ChannelInitializer<Channel> newClientHandler(final ReferenceCountedOpenSslContext context,
             final String host, final Promise<FullHttpResponse> promise) {
 
-        return new ChannelInitializer<Channel>() {
+        return new ChannelInitializer<Channel>() {//channel initializer本身也是一个handler
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 SslHandler sslHandler = context.newHandler(ch.alloc());
@@ -203,10 +192,20 @@ public class OcspClientExample {
         }
     }
 
-    private static class ExampleOcspClientHandler extends OcspClientHandler {
+    private static class ExampleOcspClientHandler extends OcspClientHandler {//netty提供
 
         ExampleOcspClientHandler(ReferenceCountedOpenSslEngine engine) {
             super(engine);
+        }
+
+
+        private void out2Pem(X509Certificate[] chain) throws Exception {
+            BASE64Encoder encoder = new BASE64Encoder();
+            for(X509Certificate cert : chain) {
+               System.out.println(X509Factory.BEGIN_CERT);
+               System.out.println(encoder.encode(cert.getEncoded()));
+               System.out.println(X509Factory.END_CERT);
+            }
         }
 
         @Override
@@ -220,10 +219,12 @@ public class OcspClientExample {
             if (response.getStatus() != OCSPResponseStatus.SUCCESSFUL) {
                 return false;
             }
-
+            //拿到所建立的TLS链接中对端的证书链中的第一个，这个就是服务器端证书
             SSLSession session = engine.getSession();
             X509Certificate[] chain = session.getPeerCertificateChain();
             BigInteger certSerial = chain[0].getSerialNumber();
+            //out2Pem(chain);
+
 
             BasicOCSPResp basicResponse = (BasicOCSPResp) response.getResponseObject();
             SingleResp first = basicResponse.getResponses()[0];
@@ -232,6 +233,7 @@ public class OcspClientExample {
             // equals() or you'll NPE!
             CertificateStatus status = first.getCertStatus();
             BigInteger ocspSerial = first.getCertID().getSerialNumber();
+
             String message = new StringBuilder()
                 .append("OCSP status of ").append(ctx.channel().remoteAddress())
                 .append("\n  Status: ").append(status == CertificateStatus.GOOD ? "Good" : status)
@@ -241,7 +243,7 @@ public class OcspClientExample {
                 .append("\n  OCSP Serial: ").append(ocspSerial)
                 .toString();
             System.out.println(message);
-
+            //验证
             return status == CertificateStatus.GOOD && certSerial.equals(ocspSerial);
         }
     }

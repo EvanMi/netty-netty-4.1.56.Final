@@ -29,7 +29,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import org.bouncycastle.asn1.ocsp.OCSPResponseStatus;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.ocsp.BasicOCSPResp;
@@ -38,12 +46,11 @@ import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.ReferenceCountedOpenSslContext;
 import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
@@ -51,6 +58,17 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.CharsetUtil;
+import org.bouncycastle.openssl.bc.BcPEMDecryptorProvider;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.bouncycastle.operator.InputDecryptorProvider;
+import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
+import org.bouncycastle.pkcs.PKCSException;
+import org.bouncycastle.pkcs.jcajce.JcePKCSPBEInputDecryptorProviderBuilder;
+
+import static io.netty.handler.codec.http.HttpHeaderNames.*;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONNECTION;
+import static io.netty.handler.codec.http.HttpHeaderValues.*;
+import static io.netty.handler.codec.http.HttpHeaderValues.KEEP_ALIVE;
 
 /**
  * ATTENTION: This is an incomplete example! In order to provide a fully functional
@@ -60,12 +78,14 @@ import io.netty.util.CharsetUtil;
 public class OcspServerExample {
     public static void main(String[] args) throws Exception {
         // We assume there's a private key.
-        PrivateKey privateKey = null;
+        //证书申请用的是sslforfree.com提供的免费证书，能用90天
+        //但是首先要有一个域名~~一年花9块钱
+        PrivateKey privateKey = parsePrivateKey(OcspServerExample.class, "private.key", null);
 
         // Step 1: Load the certificate chain for netty.io. We'll need the certificate
         // and the issuer's certificate and we don't need any of the intermediate certs.
         // The array is assumed to be a certain order to keep things simple.
-        X509Certificate[] keyCertChain = parseCertificates(OcspServerExample.class, "netty_io_chain.pem");
+        X509Certificate[] keyCertChain = parseCertificates(OcspServerExample.class, "yumi.pem");
 
         X509Certificate certificate = keyCertChain[0];
         X509Certificate issuer = keyCertChain[keyCertChain.length - 1];
@@ -131,11 +151,21 @@ public class OcspServerExample {
                 .enableOcsp(true)
                 .build();
 
+        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        EventLoopGroup childrenGroup = new NioEventLoopGroup();
         try {
-            ServerBootstrap bootstrap = new ServerBootstrap()
-                    .childHandler(newServerHandler(context, response));
+                    new ServerBootstrap()
+                            .group(bossGroup, childrenGroup)
+                            .channel(NioServerSocketChannel.class)
+                            .handler(new LoggingHandler(LogLevel.INFO))
+                            .childHandler(newServerHandler(context, response))
+                            .bind(443)
+                            .sync()
+                            .channel()
+                            .closeFuture()
+                            .sync();
+            // so on and so forth...又是没搞完的工程
 
-            // so on and so forth...
         } finally {
             context.release();
         }
@@ -157,11 +187,44 @@ public class OcspServerExample {
 
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast(sslHandler);
-
-                // so on and so forth...
+                pipeline.addLast(new HttpServerCodec());
+                pipeline.addLast(new HttpObjectAggregator(1024 * 1024));
+                pipeline.addLast(new ServerHttpHandler());
+                // so on and so forth...没搞完的工程，搞个简单的web服务器出来
             }
         };
     }
+
+
+    private static class ServerHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+
+        private static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) throws Exception {
+            System.out.println(msg.headers());
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Unpooled.wrappedBuffer(CONTENT));
+            response.headers()
+                    .set(CONTENT_TYPE, TEXT_PLAIN)
+                    .setInt(CONTENT_LENGTH, response.content().readableBytes());
+            boolean keepAlive = HttpUtil.isKeepAlive(msg);
+            if (keepAlive) {
+                if (!msg.protocolVersion().isKeepAliveDefault()) {
+                    response.headers().set(CONNECTION, KEEP_ALIVE);
+                }
+            } else {
+                // Tell the client we're going to close the connection.
+                response.headers().set(CONNECTION, CLOSE);
+            }
+
+            ChannelFuture f = ctx.writeAndFlush(response);
+
+            if (!keepAlive) {
+                f.addListener(ChannelFutureListener.CLOSE);
+            }
+        }
+    }
+
 
     private static X509Certificate[] parseCertificates(Class<?> clazz, String name) throws Exception {
         InputStream in = clazz.getResourceAsStream(name);
@@ -181,10 +244,54 @@ public class OcspServerExample {
         }
     }
 
+
+    private static PrivateKey parsePrivateKey(Class<?> clazz, String name, char[] password) throws Exception {
+        InputStream in = clazz.getResourceAsStream(name);
+        if (in == null) {
+            throw new FileNotFoundException("clazz=" + clazz + ", name=" + name);
+        }
+
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in, CharsetUtil.US_ASCII));
+            PrivateKeyInfo pki;
+            try {
+                PEMParser parser = new PEMParser(reader);
+                Object o = parser.readObject();
+                if (o instanceof PKCS8EncryptedPrivateKeyInfo) { // encrypted private key in pkcs8-format
+                    System.out.println("key in pkcs8 encoding");
+                    PKCS8EncryptedPrivateKeyInfo epki = (PKCS8EncryptedPrivateKeyInfo) o;
+                    System.out.println("encryption algorithm: " + epki.getEncryptionAlgorithm().getAlgorithm());
+                    JcePKCSPBEInputDecryptorProviderBuilder builder =
+                            new JcePKCSPBEInputDecryptorProviderBuilder().setProvider("BC");
+                    InputDecryptorProvider idp = builder.build(password);
+                    pki = epki.decryptPrivateKeyInfo(idp);
+                } else if (o instanceof PEMEncryptedKeyPair) { // encrypted private key in pkcs1-format
+                    System.out.println("key in pkcs1 encoding");
+                    PEMEncryptedKeyPair epki = (PEMEncryptedKeyPair) o;
+                    PEMKeyPair pkp = epki.decryptKeyPair(new BcPEMDecryptorProvider(password));
+                    pki = pkp.getPrivateKeyInfo();
+                } else if (o instanceof PEMKeyPair) { // unencrypted private key
+                    System.out.println("key unencrypted");
+                    PEMKeyPair pkp = (PEMKeyPair) o;
+                    pki = pkp.getPrivateKeyInfo();
+                } else {
+                    throw new PKCSException("Invalid encrypted private key class: " + o.getClass().getName());
+                }
+                JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(new BouncyCastleProvider());
+                return converter.getPrivateKey(pki);
+            } finally {
+                reader.close();
+            }
+        } finally {
+            in.close();
+        }
+    }
+
     private static X509Certificate[] parseCertificates(Reader reader) throws Exception {
 
         JcaX509CertificateConverter converter = new JcaX509CertificateConverter()
                 .setProvider(new BouncyCastleProvider());
+
 
         List<X509Certificate> dst = new ArrayList<X509Certificate>();
 
