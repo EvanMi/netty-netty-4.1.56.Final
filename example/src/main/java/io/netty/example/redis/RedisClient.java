@@ -50,10 +50,15 @@ public class RedisClient {
                  @Override
                  protected void initChannel(SocketChannel ch) throws Exception {
                      ChannelPipeline p = ch.pipeline();
+                     //redis解码器
                      p.addLast(new RedisDecoder());
+                     //类似于http协议中的chunked，把一个数据分成多个包来发送
                      p.addLast(new RedisBulkStringAggregator());
+                     //把多个消息聚合成一个数据，加快消息处理速度
                      p.addLast(new RedisArrayAggregator());
+                     //redis编码器
                      p.addLast(new RedisEncoder());
+                     //业务处理器
                      p.addLast(new RedisClientHandler());
                  }
              });
