@@ -15,11 +15,13 @@
  */
 package io.netty.example.proxy;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+
 
 public class HexDumpProxyBackendHandler extends ChannelInboundHandlerAdapter {
 
@@ -31,6 +33,7 @@ public class HexDumpProxyBackendHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
+        //只要连接成功，channel做的第一件事情就读取socket中的数据
         ctx.read();
     }
 
@@ -49,13 +52,18 @@ public class HexDumpProxyBackendHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) {
-        HexDumpProxyFrontendHandler.closeOnFlush(inboundChannel);
+    public void channelInactive(ChannelHandlerContext ctx) { closeOnFlush(inboundChannel);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         cause.printStackTrace();
-        HexDumpProxyFrontendHandler.closeOnFlush(ctx.channel());
+        closeOnFlush(ctx.channel());
+    }
+
+    void closeOnFlush(Channel ch) {
+        if (ch.isActive()) {
+            ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        }
     }
 }

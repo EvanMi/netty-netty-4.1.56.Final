@@ -33,6 +33,7 @@ public class HexDumpProxyInitializer extends ChannelInitializer<SocketChannel> {
     @Override
     public void initChannel(SocketChannel ch) {
         ch.pipeline().addLast(
+                //会输出十六进制的结果，和抓包软件打印的结果差不多
                 new LoggingHandler(LogLevel.INFO),
                 new HexDumpProxyFrontendHandler(remoteHost, remotePort));
     }

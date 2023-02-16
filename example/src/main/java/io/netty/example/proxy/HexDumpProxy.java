@@ -25,9 +25,9 @@ import io.netty.handler.logging.LoggingHandler;
 
 public final class HexDumpProxy {
 
-    static final int LOCAL_PORT = Integer.parseInt(System.getProperty("localPort", "8443"));
-    static final String REMOTE_HOST = System.getProperty("remoteHost", "www.google.com");
-    static final int REMOTE_PORT = Integer.parseInt(System.getProperty("remotePort", "443"));
+    static final int LOCAL_PORT = Integer.parseInt(System.getProperty("localPort", "8080"));
+    static final String REMOTE_HOST = System.getProperty("remoteHost", "127.0.0.1");
+    static final int REMOTE_PORT = Integer.parseInt(System.getProperty("remotePort", "8007"));
 
     public static void main(String[] args) throws Exception {
         System.err.println("Proxying *:" + LOCAL_PORT + " to " + REMOTE_HOST + ':' + REMOTE_PORT + " ...");
@@ -41,6 +41,7 @@ public final class HexDumpProxy {
              .channel(NioServerSocketChannel.class)
              .handler(new LoggingHandler(LogLevel.INFO))
              .childHandler(new HexDumpProxyInitializer(REMOTE_HOST, REMOTE_PORT))
+                    //这里不进行自动读，需要进行手动触发
              .childOption(ChannelOption.AUTO_READ, false)
              .bind(LOCAL_PORT).sync().channel().closeFuture().sync();
         } finally {

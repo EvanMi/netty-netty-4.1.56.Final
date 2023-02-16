@@ -23,7 +23,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
-
 public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 
     private final String remoteHost;
@@ -44,6 +43,7 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 
         // Start the connection attempt.
         Bootstrap b = new Bootstrap();
+        //NioEventLoop本身也是一个EventLoopGroup，但是，是SingleThreadEventLoopGroup，在注册的时候直接将channel注册到自身
         b.group(inboundChannel.eventLoop())
          .channel(ctx.channel().getClass())
          .handler(new HexDumpProxyBackendHandler(inboundChannel))
@@ -55,6 +55,8 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
             public void operationComplete(ChannelFuture future) {
                 if (future.isSuccess()) {
                     // connection complete start to read first data
+                    //只有在成功链接到要代理的服务器以后才会读取客户端发送过来的消息
+                    //当然客户端在连接成功前发送的消息都会被保存在操作系统中
                     inboundChannel.read();
                 } else {
                     // Close the connection if the connection attempt has failed.
@@ -94,12 +96,12 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
         closeOnFlush(ctx.channel());
     }
 
-    /**
-     * Closes the specified channel after all queued write requests are flushed.
-     */
-    static void closeOnFlush(Channel ch) {
+    void closeOnFlush(Channel ch) {
         if (ch.isActive()) {
+            //写刷一个空的数据，尝试把数据都发送出去，然后调用close方法进行关闭
             ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
+
+
 }
