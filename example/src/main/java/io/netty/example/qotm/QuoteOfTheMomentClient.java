@@ -46,6 +46,7 @@ public final class QuoteOfTheMomentClient {
              .option(ChannelOption.SO_BROADCAST, true)
              .handler(new QuoteOfTheMomentClientHandler());
 
+            //bind端口0，表示端口由操作系统分配。UDP没有connect过程，只有bind
             Channel ch = b.bind(0).sync().channel();
 
             // Broadcast the QOTM request to port 8080.
