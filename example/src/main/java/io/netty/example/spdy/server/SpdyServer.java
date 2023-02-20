@@ -23,13 +23,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.*;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
-import io.netty.handler.ssl.ApplicationProtocolNames;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 /**
@@ -55,18 +52,23 @@ public final class SpdyServer {
     static final int PORT = Integer.parseInt(System.getProperty("port", "8443"));
 
     public static void main(String[] args) throws Exception {
+        SslProvider provider = SslProvider.isAlpnSupported(SslProvider.OPENSSL) ? SslProvider.OPENSSL : SslProvider.JDK;
         // Configure SSL.
         SelfSignedCertificate ssc = new SelfSignedCertificate();
-        SslContext sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey())
-            .applicationProtocolConfig(new ApplicationProtocolConfig(
-                        Protocol.NPN,
+
+        SslContextBuilder sslContextBuilder = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey())
+                .sslProvider(provider)
+                .applicationProtocolConfig(new ApplicationProtocolConfig(
+                        //JDK8了，直接就使用ALPN了，不用NPN
+                        Protocol.ALPN,
                         // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK providers.
                         SelectorFailureBehavior.NO_ADVERTISE,
                         // ACCEPT is currently the only mode supported by both OpenSsl and JDK providers.
                         SelectedListenerFailureBehavior.ACCEPT,
                         ApplicationProtocolNames.SPDY_3_1,
-                        ApplicationProtocolNames.HTTP_1_1))
-            .build();
+                        ApplicationProtocolNames.HTTP_1_1));
+
+        SslContext sslCtx = sslContextBuilder.build();
 
         // Configure the server.
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);

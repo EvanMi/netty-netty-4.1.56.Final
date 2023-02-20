@@ -28,13 +28,10 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.*;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
-import io.netty.handler.ssl.ApplicationProtocolNames;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 /**
@@ -56,11 +53,13 @@ public final class SpdyClient {
     static final int PORT = Integer.parseInt(System.getProperty("port", "8443"));
 
     public static void main(String[] args) throws Exception {
+        SslProvider provider = SslProvider.isAlpnSupported(SslProvider.OPENSSL) ? SslProvider.OPENSSL : SslProvider.JDK;
         // Configure SSL.
         final SslContext sslCtx = SslContextBuilder.forClient()
+            .sslProvider(provider)
             .trustManager(InsecureTrustManagerFactory.INSTANCE)
             .applicationProtocolConfig(new ApplicationProtocolConfig(
-                        Protocol.NPN,
+                        Protocol.ALPN,
                         // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK providers.
                         SelectorFailureBehavior.NO_ADVERTISE,
                         // ACCEPT is currently the only mode supported by both OpenSsl and JDK providers.
