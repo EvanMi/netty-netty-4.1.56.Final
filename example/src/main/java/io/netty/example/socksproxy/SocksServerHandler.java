@@ -42,6 +42,7 @@ public final class SocksServerHandler extends SimpleChannelInboundHandler<SocksM
     public void channelRead0(ChannelHandlerContext ctx, SocksMessage socksRequest) throws Exception {
         switch (socksRequest.version()) {
             case SOCKS4a:
+                System.out.println("SOCKS4a");
                 Socks4CommandRequest socksV4CmdRequest = (Socks4CommandRequest) socksRequest;
                 if (socksV4CmdRequest.type() == Socks4CommandType.CONNECT) {
                     ctx.pipeline().addLast(new SocksServerConnectHandler());
@@ -53,15 +54,18 @@ public final class SocksServerHandler extends SimpleChannelInboundHandler<SocksM
                 break;
             case SOCKS5:
                 if (socksRequest instanceof Socks5InitialRequest) {
+                    System.out.println("SOCKS5 - initial");
                     // auth support example
                     //ctx.pipeline().addFirst(new Socks5PasswordAuthRequestDecoder());
                     //ctx.write(new DefaultSocks5AuthMethodResponse(Socks5AuthMethod.PASSWORD));
                     ctx.pipeline().addFirst(new Socks5CommandRequestDecoder());
                     ctx.write(new DefaultSocks5InitialResponse(Socks5AuthMethod.NO_AUTH));
                 } else if (socksRequest instanceof Socks5PasswordAuthRequest) {
+                    System.out.println("SOCKS5 -  auth");
                     ctx.pipeline().addFirst(new Socks5CommandRequestDecoder());
                     ctx.write(new DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.SUCCESS));
                 } else if (socksRequest instanceof Socks5CommandRequest) {
+                    System.out.println("SOCKS5 - common");
                     Socks5CommandRequest socks5CmdRequest = (Socks5CommandRequest) socksRequest;
                     if (socks5CmdRequest.type() == Socks5CommandType.CONNECT) {
                         ctx.pipeline().addLast(new SocksServerConnectHandler());
