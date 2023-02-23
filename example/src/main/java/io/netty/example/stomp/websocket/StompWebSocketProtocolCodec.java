@@ -33,7 +33,6 @@ import java.util.List;
 @Sharable
 public class StompWebSocketProtocolCodec extends MessageToMessageCodec<WebSocketFrame, StompSubframe> {
 
-    static final StompWebSocketProtocolCodec INSTANCE = new StompWebSocketProtocolCodec();
     private final StompChatHandler stompChatHandler = new StompChatHandler();
     private final StompWebSocketFrameEncoder stompWebSocketFrameEncoder = new StompWebSocketFrameEncoder();
 
