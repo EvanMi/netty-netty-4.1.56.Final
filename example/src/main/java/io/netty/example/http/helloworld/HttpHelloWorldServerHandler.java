@@ -89,6 +89,9 @@ public class HttpHelloWorldServerHandler extends SimpleChannelInboundHandler<Htt
                         sendFileFuture =
                                 ctx.writeAndFlush(new HttpChunkedInput(new ChunkedFile(raf, 0, fileLength, 8192)),
                                         ctx.newProgressivePromise());
+                        //为哈这里不用再发送
+                        //lastContentFuture = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+                        //因为HttpChunkedInput中有相应的处理
                         response.headers().set(TRANSFER_ENCODING, CHUNKED);
                         // HttpChunkedInput will write the end marker (LastHttpContent) for us.
                         lastContentFuture = sendFileFuture;

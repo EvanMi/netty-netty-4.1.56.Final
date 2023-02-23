@@ -25,6 +25,7 @@ public final class StompSubscription {
     private final Channel channel;
 
     public StompSubscription(String id, String destination, Channel channel) {
+        //一个订阅
         this.id = ObjectUtil.checkNotNull(id, "id");
         this.destination = ObjectUtil.checkNotNull(destination, "destination");
         this.channel = ObjectUtil.checkNotNull(channel, "channel");

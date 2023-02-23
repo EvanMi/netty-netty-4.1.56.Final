@@ -33,6 +33,7 @@ import java.util.List;
 
 public class StompWebSocketFrameEncoder extends StompSubframeEncoder {
 
+    /**闲，不是，是通过覆写，把default作用域修改成了public*/
     @Override
     public void encode(ChannelHandlerContext ctx, StompSubframe msg, List<Object> out) throws Exception {
         super.encode(ctx, msg, out);

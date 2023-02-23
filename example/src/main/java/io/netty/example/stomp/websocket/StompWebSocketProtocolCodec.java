@@ -33,12 +33,15 @@ import java.util.List;
 @Sharable
 public class StompWebSocketProtocolCodec extends MessageToMessageCodec<WebSocketFrame, StompSubframe> {
 
+    static final StompWebSocketProtocolCodec INSTANCE = new StompWebSocketProtocolCodec();
     private final StompChatHandler stompChatHandler = new StompChatHandler();
     private final StompWebSocketFrameEncoder stompWebSocketFrameEncoder = new StompWebSocketFrameEncoder();
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        //握手成功以后
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
+            //获取stomp version
             StompVersion stompVersion = StompVersion.findBySubProtocol(((HandshakeComplete) evt).selectedSubprotocol());
             ctx.channel().attr(StompVersion.CHANNEL_ATTRIBUTE_KEY).set(stompVersion);
             ctx.pipeline()

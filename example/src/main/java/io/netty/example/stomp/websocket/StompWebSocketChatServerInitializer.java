@@ -25,11 +25,9 @@ import io.netty.util.internal.ObjectUtil;
 public class StompWebSocketChatServerInitializer extends ChannelInitializer<SocketChannel> {
 
     private final String chatPath;
-    private final StompWebSocketProtocolCodec stompWebSocketProtocolCodec;
 
     public StompWebSocketChatServerInitializer(String chatPath) {
         this.chatPath = ObjectUtil.checkNotNull(chatPath, "chatPath");
-        stompWebSocketProtocolCodec = new StompWebSocketProtocolCodec();
     }
 
     @Override
@@ -39,6 +37,6 @@ public class StompWebSocketChatServerInitializer extends ChannelInitializer<Sock
                .addLast(new HttpObjectAggregator(65536))
                .addLast(StompWebSocketClientPageHandler.INSTANCE)
                .addLast(new WebSocketServerProtocolHandler(chatPath, StompVersion.SUB_PROTOCOLS))
-               .addLast(stompWebSocketProtocolCodec);
+               .addLast(StompWebSocketProtocolCodec.INSTANCE);
     }
 }

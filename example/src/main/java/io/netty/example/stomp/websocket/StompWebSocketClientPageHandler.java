@@ -52,11 +52,12 @@ public final class StompWebSocketClientPageHandler extends SimpleChannelInboundH
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        //接收到HTTP协议升级请求后，把请求传递给后面的handler进行处理
         if (request.headers().contains(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET, true)) {
             ctx.fireChannelRead(request.retain());
             return;
         }
-
+        //解码是吧，返回bad request
         if (request.decoderResult().isFailure()) {
             FullHttpResponse badRequest = new DefaultFullHttpResponse(request.protocolVersion(), BAD_REQUEST);
             sendResponse(badRequest, ctx, true);
@@ -64,10 +65,13 @@ public final class StompWebSocketClientPageHandler extends SimpleChannelInboundH
         }
 
         if (!sendResource(request, ctx)) {
+            //没有成功返回页面，发送not found
             FullHttpResponse notFound = new DefaultFullHttpResponse(request.protocolVersion(), NOT_FOUND);
             notFound.headers().set(CONTENT_TYPE, TEXT_PLAIN);
             String payload = "Requested resource " + request.uri() + " not found";
+            //设置内容
             notFound.content().writeCharSequence(payload, CharsetUtil.UTF_8);
+            //设置长度
             HttpUtil.setContentLength(notFound, notFound.content().readableBytes());
             sendResponse(notFound, ctx, true);
         }
@@ -123,7 +127,9 @@ public final class StompWebSocketClientPageHandler extends SimpleChannelInboundH
 
         response.headers().set(CONTENT_TYPE, contentType);
         sendResponse(response, ctx, false);
+        //https的情况下就不能用这个啦
         ctx.write(new DefaultFileRegion(raf.getChannel(), 0, fileLength));
+        //这才是正确的发送方式
         ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
         return true;
     }

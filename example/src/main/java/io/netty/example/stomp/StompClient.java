@@ -33,11 +33,14 @@ import io.netty.handler.codec.stomp.StompSubframeEncoder;
  */
 public final class StompClient {
 
+    // https://mirrors.tuna.tsinghua.edu.cn/apache/activemq/
+    // hornetq就是activemq
+
     static final boolean SSL = System.getProperty("ssl") != null;
     static final String HOST = System.getProperty("host", "127.0.0.1");
     static final int PORT = Integer.parseInt(System.getProperty("port", "61613"));
-    static final String LOGIN = System.getProperty("login", "guest");
-    static final String PASSCODE = System.getProperty("passcode", "guest");
+    static final String LOGIN = System.getProperty("login", "admin");
+    static final String PASSCODE = System.getProperty("passcode", "admin");
     static final String TOPIC = System.getProperty("topic", "jms.topic.exampleTopic");
 
     public static void main(String[] args) throws Exception {
