@@ -24,6 +24,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.util.internal.StringUtil;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -62,7 +63,7 @@ public final class TelnetClient {
             BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
             for (;;) {
                 String line = in.readLine();
-                if (line == null) {
+                if (StringUtil.isNullOrEmpty(line)) {
                     break;
                 }
 
