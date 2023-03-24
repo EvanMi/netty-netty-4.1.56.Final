@@ -195,6 +195,89 @@ public class OcspServerExample {
         };
     }
 
+    private static X509Certificate[] parseCertificates(Class<?> clazz, String name) throws Exception {
+        InputStream in = clazz.getResourceAsStream(name);
+        if (in == null) {
+            throw new FileNotFoundException("clazz=" + clazz + ", name=" + name);
+        }
+
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in, CharsetUtil.US_ASCII));
+            try {
+                return parseCertificates(reader);
+            } finally {
+                reader.close();
+            }
+        } finally {
+            in.close();
+        }
+    }
+
+    private static PrivateKey parsePrivateKey(Class<?> clazz, String name, char[] password) throws Exception {
+        InputStream in = clazz.getResourceAsStream(name);
+        if (in == null) {
+            return null;
+        }
+
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in, CharsetUtil.US_ASCII));
+            PrivateKeyInfo pki;
+            try {
+                PEMParser parser = new PEMParser(reader);
+                Object rawPrivateKey = parser.readObject();
+                if (rawPrivateKey instanceof PKCS8EncryptedPrivateKeyInfo) {
+                    // encrypted private key in pkcs8-format
+                    PKCS8EncryptedPrivateKeyInfo epki = (PKCS8EncryptedPrivateKeyInfo) rawPrivateKey;
+                    JcePKCSPBEInputDecryptorProviderBuilder builder =
+                            new JcePKCSPBEInputDecryptorProviderBuilder().setProvider("BC");
+                    InputDecryptorProvider idp = builder.build(password);
+                    pki = epki.decryptPrivateKeyInfo(idp);
+                } else if (rawPrivateKey instanceof PEMEncryptedKeyPair) {
+                    // encrypted private key in pkcs1-format
+                    PEMEncryptedKeyPair epki = (PEMEncryptedKeyPair) rawPrivateKey;
+                    PEMKeyPair pkp = epki.decryptKeyPair(new BcPEMDecryptorProvider(password));
+                    pki = pkp.getPrivateKeyInfo();
+                } else if (rawPrivateKey instanceof PEMKeyPair) {
+                    // unencrypted private key
+                    PEMKeyPair pkp = (PEMKeyPair) rawPrivateKey;
+                    pki = pkp.getPrivateKeyInfo();
+                } else {
+                    throw new PKCSException("Invalid encrypted private key class: " + rawPrivateKey.getClass().getName());
+                }
+                JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(new BouncyCastleProvider());
+                return converter.getPrivateKey(pki);
+            } finally {
+                reader.close();
+            }
+        } finally {
+            in.close();
+        }
+    }
+
+    private static X509Certificate[] parseCertificates(Reader reader) throws Exception {
+
+        JcaX509CertificateConverter converter = new JcaX509CertificateConverter()
+                .setProvider(new BouncyCastleProvider());
+        List<X509Certificate> dst = new ArrayList<X509Certificate>();
+
+        PEMParser parser = new PEMParser(reader);
+        try {
+          X509CertificateHolder holder = null;
+
+          while ((holder = (X509CertificateHolder) parser.readObject()) != null) {
+            X509Certificate certificate = converter.getCertificate(holder);
+            if (certificate == null) {
+              continue;
+            }
+
+            dst.add(certificate);
+          }
+        } finally {
+            parser.close();
+        }
+
+        return dst.toArray(new X509Certificate[0]);
+    }
 
     private static class ServerHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
@@ -202,7 +285,6 @@ public class OcspServerExample {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) throws Exception {
-            System.out.println(msg.headers());
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Unpooled.wrappedBuffer(CONTENT));
             response.headers()
                     .set(CONTENT_TYPE, TEXT_PLAIN)
@@ -223,94 +305,5 @@ public class OcspServerExample {
                 f.addListener(ChannelFutureListener.CLOSE);
             }
         }
-    }
-
-
-    private static X509Certificate[] parseCertificates(Class<?> clazz, String name) throws Exception {
-        InputStream in = clazz.getResourceAsStream(name);
-        if (in == null) {
-            throw new FileNotFoundException("clazz=" + clazz + ", name=" + name);
-        }
-
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in, CharsetUtil.US_ASCII));
-            try {
-                return parseCertificates(reader);
-            } finally {
-                reader.close();
-            }
-        } finally {
-            in.close();
-        }
-    }
-
-
-    private static PrivateKey parsePrivateKey(Class<?> clazz, String name, char[] password) throws Exception {
-        InputStream in = clazz.getResourceAsStream(name);
-        if (in == null) {
-            throw new FileNotFoundException("clazz=" + clazz + ", name=" + name);
-        }
-
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in, CharsetUtil.US_ASCII));
-            PrivateKeyInfo pki;
-            try {
-                PEMParser parser = new PEMParser(reader);
-                Object o = parser.readObject();
-                if (o instanceof PKCS8EncryptedPrivateKeyInfo) { // encrypted private key in pkcs8-format
-                    System.out.println("key in pkcs8 encoding");
-                    PKCS8EncryptedPrivateKeyInfo epki = (PKCS8EncryptedPrivateKeyInfo) o;
-                    System.out.println("encryption algorithm: " + epki.getEncryptionAlgorithm().getAlgorithm());
-                    JcePKCSPBEInputDecryptorProviderBuilder builder =
-                            new JcePKCSPBEInputDecryptorProviderBuilder().setProvider("BC");
-                    InputDecryptorProvider idp = builder.build(password);
-                    pki = epki.decryptPrivateKeyInfo(idp);
-                } else if (o instanceof PEMEncryptedKeyPair) { // encrypted private key in pkcs1-format
-                    System.out.println("key in pkcs1 encoding");
-                    PEMEncryptedKeyPair epki = (PEMEncryptedKeyPair) o;
-                    PEMKeyPair pkp = epki.decryptKeyPair(new BcPEMDecryptorProvider(password));
-                    pki = pkp.getPrivateKeyInfo();
-                } else if (o instanceof PEMKeyPair) { // unencrypted private key
-                    System.out.println("key unencrypted");
-                    PEMKeyPair pkp = (PEMKeyPair) o;
-                    pki = pkp.getPrivateKeyInfo();
-                } else {
-                    throw new PKCSException("Invalid encrypted private key class: " + o.getClass().getName());
-                }
-                JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(new BouncyCastleProvider());
-                return converter.getPrivateKey(pki);
-            } finally {
-                reader.close();
-            }
-        } finally {
-            in.close();
-        }
-    }
-
-    private static X509Certificate[] parseCertificates(Reader reader) throws Exception {
-
-        JcaX509CertificateConverter converter = new JcaX509CertificateConverter()
-                .setProvider(new BouncyCastleProvider());
-
-
-        List<X509Certificate> dst = new ArrayList<X509Certificate>();
-
-        PEMParser parser = new PEMParser(reader);
-        try {
-          X509CertificateHolder holder = null;
-
-          while ((holder = (X509CertificateHolder) parser.readObject()) != null) {
-            X509Certificate certificate = converter.getCertificate(holder);
-            if (certificate == null) {
-              continue;
-            }
-
-            dst.add(certificate);
-          }
-        } finally {
-            parser.close();
-        }
-
-        return dst.toArray(new X509Certificate[0]);
     }
 }
