@@ -40,7 +40,7 @@ import java.net.URI;
  */
 public final class HttpSnoopClient {
 
-    static final String URL = System.getProperty("url", "https://127.0.0.1:8443/");
+    static final String URL = System.getProperty("url", "http://127.0.0.1:8080/");
 
     public static void main(String[] args) throws Exception {
         URI uri = new URI(URL);
@@ -101,11 +101,14 @@ public final class HttpSnoopClient {
             request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
             request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP);
             //sudo tcpdump -i lo0 host 127.0.0.1 and port 8080 -w file
+            //16进制 -> 字符串对照表  https://blog.csdn.net/u010033786/article/details/126275465
             //为了触发trailer
             request.headers().set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
             DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent(Unpooled.copiedBuffer("dog~lee", CharsetUtil.UTF_8), true);
             HttpHeaders entries = defaultLastHttpContent.trailingHeaders();
+            //sudo tcpdump -i lo0 host 127.0.0.1 and port 8080  -X -e -v -n -vv
             entries.set("trailer-nice", "yes ");
+            entries.set("trailer-bad", "bad ");
             HttpChunkedInput httpChunkedInput = new HttpChunkedInput(new ChunkedStream(new ByteArrayInputStream("abc".getBytes())),
                     defaultLastHttpContent);
             //理解错误，在chunked以后不需要设置长度字段了，而是以最后一个长度必然为0的chunk来表示传输完成
