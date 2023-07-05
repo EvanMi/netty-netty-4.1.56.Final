@@ -81,17 +81,34 @@ public final class HttpSnoopClient {
             // Make the connection attempt.
             Channel ch = b.connect(host, port).sync().channel();
 
-            /**
+            /*
              * chunked报文格式
              *
-             * headers\r\n
+             * 请求行\r\n
+             * headers\r\n\r\n
              * size\r\n
              * data\r\n
              * size\r\n
              * data\r\n
              * ...
              * 0\r\n
-             * trailer\r\n
+             * trailer\r\n\r\n
+             *
+             * */
+
+
+            /*
+             * chunked报文格式
+             *
+             * 请求行\r\n
+             * headers\r\n\r\n
+             * size\r\n
+             * data\r\n
+             * size\r\n
+             * data\r\n
+             * ...
+             * 0\r\n\r\n
+             *
              * */
 
             // Prepare the HTTP request.
@@ -104,11 +121,12 @@ public final class HttpSnoopClient {
             //16进制 -> 字符串对照表  https://blog.csdn.net/u010033786/article/details/126275465
             //为了触发trailer
             request.headers().set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
+
             DefaultLastHttpContent defaultLastHttpContent = new DefaultLastHttpContent(Unpooled.copiedBuffer("dog~lee", CharsetUtil.UTF_8), true);
             HttpHeaders entries = defaultLastHttpContent.trailingHeaders();
             //sudo tcpdump -i lo0 host 127.0.0.1 and port 8080  -X -e -v -n -vv
-            entries.set("trailer-nice", "yes ");
-            entries.set("trailer-bad", "bad ");
+            //entries.set("trailer-nice", "yes");
+            //entries.set("trailer-bad", "bad");
             HttpChunkedInput httpChunkedInput = new HttpChunkedInput(new ChunkedStream(new ByteArrayInputStream("abc".getBytes())),
                     defaultLastHttpContent);
             //理解错误，在chunked以后不需要设置长度字段了，而是以最后一个长度必然为0的chunk来表示传输完成
