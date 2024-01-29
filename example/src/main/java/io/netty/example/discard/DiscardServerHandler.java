@@ -15,6 +15,7 @@
  */
 package io.netty.example.discard;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
@@ -26,6 +27,10 @@ public class DiscardServerHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
         // discard
+        ByteBuf buf = (ByteBuf)msg;
+        byte[] bytes = new byte[buf.writerIndex()];
+        buf.readBytes(bytes);
+        System.out.println("收到消息\n" + new String(bytes));
     }
 
     @Override
